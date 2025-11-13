@@ -1,7 +1,7 @@
 from collections import deque
 
 from fastapi import FastAPI, HTTPException, WebSocket
-from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from typing import Optional, Dict, List
 import asyncio
 import json
@@ -20,6 +20,8 @@ app = FastAPI(
     description="Backend API for Mooring System Monitoring",
     version="1.0.0"
 )
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Store latest data
 current_data: Optional[MooringTerminal] = None
@@ -96,7 +98,7 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 
-@app.get("/api/data")
+@app.get("/ships")
 async def get_data():
     return {"data": mooring_db[-1]}
 
@@ -154,7 +156,7 @@ async def get_ship_data(ship_id: str):
                 "terminal": current_data.name,
                 "timestamp": current_data.timestamp.isoformat() if current_data.timestamp else None,
                 "statistics": {
-                    "orientation_angle": _calculate_orientation(None, None, None),
+                    "orientation_angle": await _calculate_orientation(None, None, None),
                     "total_tension": berth.total_berth_tension,
                     "tensions_by_line_type": berth.get_all_tensions_by_line_type(),
                     "active_bollards": len([b for b in berth.bollards if b.active_hook_count > 0]),
