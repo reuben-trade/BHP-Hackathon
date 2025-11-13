@@ -1,3 +1,5 @@
+from collections import deque
+
 from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.responses import StreamingResponse
 from typing import Optional, Dict, List
@@ -9,6 +11,7 @@ from starlette.websockets import WebSocketDisconnect
 
 from models import MooringTerminal, Berth, Bollard, Hook
 
+
 app = FastAPI(
     title="BHP Mooring System Backend API",
     description="Backend API for Mooring System Monitoring",
@@ -17,6 +20,7 @@ app = FastAPI(
 
 # Store latest data
 current_data: Optional[MooringTerminal] = None
+mooring_db = deque(maxlen=1000)
 
 
 class ConnectionManager:
@@ -72,6 +76,7 @@ async def receive(data: MooringTerminal):
         data.timestamp = datetime.now()
 
     current_data = data
+    mooring_db.append(data)
 
     await manager.broadcast(data.model_dump_json())
 
@@ -87,6 +92,130 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(websocket)
 
+
+@app.get("/api/data")
+async def get_data():
+    return {"data": mooring_db[-1]}
+
+
+@app.get("/ships/{ship_id}")
+async def get_ship_data(ship_id: str):
+    """
+    Get the most recent data for a specific ship by vessel ID.
+    Returns berth information, bollard tensions, and ship details.
+    """
+    if current_data is None:
+        raise HTTPException(status_code=404, detail="No data available")
+
+    # Search through all berths for the ship
+    for berth in current_data.berths:
+        if berth.ship and berth.ship.vesselId == ship_id:
+            # Build comprehensive ship data
+            bollard_data = []
+            for bollard in berth.bollards:
+                hooks_data = []
+                for hook in bollard.hooks:
+                    if hook.tension is not None:  # Only include active hooks
+                        hooks_data.append({
+                            "name": hook.name,
+                            "tension": hook.tension,
+                            "status": hook.tension_status,
+                            "faulted": hook.faulted,
+                            "line_type": hook.attachedLine,
+                            "is_active": hook.is_active
+                        })
+
+                if hooks_data:  # Only include bollards with active hooks
+                    bollard_data.append({
+                        "name": bollard.name,
+                        "total_tension": bollard.total_tension,
+                        "active_hooks": bollard.active_hook_count,
+                        "tensions_by_line": bollard.get_tensions_by_line(),
+                        "hooks": hooks_data
+                    })
+
+            return {
+                "ship": {
+                    "name": berth.ship.name,
+                    "vessel_id": berth.ship.vesselId
+                },
+                "berth": berth.name,
+                "terminal": current_data.name,
+                "timestamp": current_data.timestamp.isoformat() if current_data.timestamp else None,
+                "statistics": {
+                    "total_tension": berth.total_berth_tension,
+                    "tensions_by_line_type": berth.get_all_tensions_by_line_type(),
+                    "active_bollards": len([b for b in berth.bollards if b.active_hook_count > 0]),
+                    "total_bollards": len(berth.bollards),
+                    "active_hooks": sum(b.active_hook_count for b in berth.bollards)
+                },
+                "bollards": bollard_data,
+                "radars": [
+                    {
+                        "name": radar.name,
+                        "distance": radar.shipDistance,
+                        "distance_change": radar.distanceChange,
+                        "status": radar.distanceStatus,
+                        "is_active": radar.is_active
+                    }
+                    for radar in berth.radars
+                ]
+            }
+
+    # Ship not found
+    raise HTTPException(
+        status_code=404,
+        detail=f"Ship with vessel ID {ship_id} not found in any berth"
+    )
+
+@app.get("/ships/{ship_id}/history")
+async def get_ship_history(ship_id: str, limit: int = 100):
+    """
+    Get historical tension data for a specific ship.
+    Useful for trend analysis and charts.
+    """
+    ship_history = []
+
+    for entry in list(mooring_db)[-limit:]:
+        # Search for ship in this historical entry
+        for berth in entry.berths:
+            ship = berth.ship
+            if ship and ship.vesselId == ship_id:
+                # Extract key metrics
+                total_tension = 0
+                tensions_by_line = {}
+
+                for bollard in berth.bollards:
+                    for hook in bollard.hooks:
+                        if hook.tension:
+                            total_tension += hook.tension
+                            line_type = hook.attachedLine
+                            if line_type:
+                                if line_type not in tensions_by_line:
+                                    tensions_by_line[line_type] = []
+                                tensions_by_line[line_type].append(hook.tension)
+
+                ship_history.append({
+                    'timestamp': entry.timestamp,
+                    'total_tension': total_tension,
+                    'tensions_by_line': {
+                        line: sum(tensions)
+                        for line, tensions in tensions_by_line.items()
+                    }
+                })
+                break
+
+    if not ship_history:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No historical data found for ship {ship_id}"
+        )
+
+    return {
+        "ship_id": ship_id,
+        "data_points": len(ship_history),
+        "history": ship_history
+    }
 
 @app.get("/terminal/status")
 async def get_terminal_status():
@@ -122,7 +251,6 @@ async def get_berth_details(berth_name: str):
         raise HTTPException(status_code=404, detail=f"Berth {berth_name} not found")
 
     return berth.model_dump_json()
-
 
 @app.get("/berth/{berth_name}/tensions")
 async def get_berth_tensions(berth_name: str):
