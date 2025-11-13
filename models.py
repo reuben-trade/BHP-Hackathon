@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, field_validator
 from typing import Optional, List, Dict
 from enum import Enum
 from datetime import datetime
@@ -50,6 +50,9 @@ class Hook(BaseModel):
 class Bollard(BaseModel):
     name: str
     hooks: List[Hook]
+    colour: str = "Grey"
+    alert: bool = False
+
 
     @property
     def total_tension(self) -> float:
@@ -70,6 +73,7 @@ class Bollard(BaseModel):
     def active_hook_count(self) -> int:
         """Number of hooks with active lines."""
         return len(self.active_hooks)
+
 
     def get_tensions_by_line(self) -> Dict[str, List[float]]:
         """Get all tensions grouped by line type (HEAD, STERN, etc)."""
@@ -105,7 +109,7 @@ class Berth(BaseModel):
     hookCount: int
     ship: Optional[Ship] = None
     radars: List[Radar] = []
-    bollards: List[Bollard] = []
+    bollards: List[Bollard] = {}
 
     @validator('bollards')
     def validate_bollard_count(cls, v, values):
@@ -180,3 +184,10 @@ class MooringTerminal(BaseModel):
         json_encoders = {
             datetime: lambda v: v.isoformat()
         }
+
+class WebhookRequest(BaseModel):
+    berth_name: str
+    bollard_name: str
+    hook_id: str
+    tension: int
+    colour: Optional[str]
