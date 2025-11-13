@@ -4,6 +4,9 @@ from typing import Optional, Dict, List
 import asyncio
 import json
 from datetime import datetime
+
+from starlette.websockets import WebSocketDisconnect
+
 from models import MooringTerminal, Berth, Bollard, Hook
 
 app = FastAPI(
@@ -25,7 +28,7 @@ class ConnectionManager:
         self.active_connections.append(websocket)
         # Send current data immediately upon connection
         if current_data:
-            await websocket.send_json(current_data.dict())
+            await websocket.send_json(current_data.model_dump_json())
 
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
@@ -70,31 +73,19 @@ async def receive(data: MooringTerminal):
 
     current_data = data
 
-    # Process tension data for each berth
-    analysis = {}
-    for berth in data.berths:
-        if berth.has_ship:
-            berth_analysis = {
-                "ship_name": berth.ship.name,
-                "vessel_id": berth.ship.vesselId,
-                "total_tension": berth.total_berth_tension,
-                "tensions_by_bollard": berth.get_tensions_by_bollard(),
-                "tensions_by_line_type": berth.get_all_tensions_by_line_type(),
-                "active_bollards": len([b for b in berth.bollards if b.active_hook_count > 0]),
-                "total_bollards": len(berth.bollards),
-                "active_radars": len(berth.active_radars)
-            }
-            analysis[berth.name] = berth_analysis
+    await manager.broadcast(data.model_dump_json())
 
-    # Broadcast to connected clients
-    await broadcast_data(data.model_dump_json())
+    return {"status": "received", "timestamp": data.timestamp}
 
-    return {
-        "status": "received",
-        "terminal": data.name,
-        "timestamp": data.timestamp,
-        "analysis": analysis
-    }
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """Websocket endpoint - clients connect to receive json loads"""
+    await manager.connect(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        manager.disconnect(websocket)
 
 
 @app.get("/terminal/status")
@@ -217,10 +208,7 @@ async def get_bollard_details(berth_name: str, bollard_name: str):
 
 @app.get("/visualization/{berth_name}")
 async def get_visualization_data(berth_name: str):
-    """
-    Get data formatted specifically for ship layout visualization.
-    Returns bollard positions with tension data for each line type.
-    """
+    """Get data formatted for visualization."""
     if current_data is None:
         raise HTTPException(status_code=404, detail="No data available")
 
@@ -228,10 +216,9 @@ async def get_visualization_data(berth_name: str):
     if berth is None:
         raise HTTPException(status_code=404, detail=f"Berth {berth_name} not found")
 
-    # Format data for visualization
     viz_data = {
         "berth": berth_name,
-        "ship": berth.ship.model_dump_json() if berth.ship else None,
+        "ship": berth.ship.model_dump() if berth.ship else None,
         "bollards": []
     }
 
@@ -239,12 +226,11 @@ async def get_visualization_data(berth_name: str):
         bollard_viz = {
             "id": bollard.name,
             "index": idx,
-            "position": idx / len(berth.bollards),  # Normalized position (0-1)
+            "position": idx / len(berth.bollards),
             "total_tension": bollard.total_tension,
             "lines": []
         }
 
-        # Group by line type for visualization
         tensions_by_line = bollard.get_tensions_by_line()
         for line_type, tensions in tensions_by_line.items():
             bollard_viz["lines"].append({
@@ -258,7 +244,6 @@ async def get_visualization_data(berth_name: str):
 
         viz_data["bollards"].append(bollard_viz)
 
-    # Add summary statistics
     viz_data["summary"] = {
         "total_tension": berth.total_berth_tension,
         "line_type_totals": berth.get_all_tensions_by_line_type(),
@@ -268,43 +253,6 @@ async def get_visualization_data(berth_name: str):
 
     return viz_data
 
-
-@app.get("/stream")
-async def stream_data():
-    """Live stream endpoint - Server-Sent Events (SSE)."""
-
-    async def event_generator():
-        queue = asyncio.Queue()
-        subscribers.append(queue)
-
-        try:
-            # Send initial data
-            if current_data:
-                yield f"data: {json.dumps(current_data.model_dump_json())}\n\n"
-
-            # Keep connection alive and send new data
-            while True:
-                data = await queue.get()
-                yield f"data: {json.dumps(data)}\n\n"
-        except asyncio.CancelledError:
-            subscribers.remove(queue)
-            raise
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"
-        }
-    )
-
-
-async def broadcast_data(data: dict):
-    """Send data to all connected subscribers."""
-    for queue in subscribers:
-        await queue.put(data)
 
 
 if __name__ == "__main__":
