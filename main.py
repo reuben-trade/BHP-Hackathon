@@ -6,7 +6,7 @@ from typing import Optional, Dict, List
 import asyncio
 import json
 from datetime import datetime
-
+from fastapi.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
 
 from models import MooringTerminal, Berth, Bollard, Hook
@@ -19,6 +19,14 @@ app = FastAPI(
     title="BHP Mooring System Backend API",
     description="Backend API for Mooring System Monitoring",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify exact origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
