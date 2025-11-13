@@ -11,6 +11,9 @@ from starlette.websockets import WebSocketDisconnect
 
 from models import MooringTerminal, Berth, Bollard, Hook
 
+DEFAULT_ANGLE = 0
+DEFAULT_SHIP_W = 20
+DEFAULT_SHIP_L = 80
 
 app = FastAPI(
     title="BHP Mooring System Backend API",
@@ -107,6 +110,7 @@ async def get_ship_data(ship_id: str):
     if current_data is None:
         raise HTTPException(status_code=404, detail="No data available")
 
+
     # Search through all berths for the ship
     for berth in current_data.berths:
         if berth.ship and berth.ship.vesselId == ship_id:
@@ -134,15 +138,23 @@ async def get_ship_data(ship_id: str):
                         "hooks": hooks_data
                     })
 
+            async def _calculate_orientation(first_radar, second_radar, dist_between_radar):
+                """Calculate angle of orientation of the ship """
+                #todo: some calculation
+                return 0
+
             return {
                 "ship": {
                     "name": berth.ship.name,
-                    "vessel_id": berth.ship.vesselId
+                    "vessel_id": berth.ship.vesselId,
+                    "ship_width": DEFAULT_SHIP_W,
+                    "ship_length": DEFAULT_SHIP_L,
                 },
                 "berth": berth.name,
                 "terminal": current_data.name,
                 "timestamp": current_data.timestamp.isoformat() if current_data.timestamp else None,
                 "statistics": {
+                    "orientation_angle": _calculate_orientation(None, None, None),
                     "total_tension": berth.total_berth_tension,
                     "tensions_by_line_type": berth.get_all_tensions_by_line_type(),
                     "active_bollards": len([b for b in berth.bollards if b.active_hook_count > 0]),
