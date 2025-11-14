@@ -5,6 +5,8 @@ from datetime import datetime
 
 #TODO: hook.colour for the ipad view
 
+# harcode colour in interface
+
 # Enums
 class DistanceStatus(str, Enum):
     ACTIVE = "ACTIVE"
@@ -189,6 +191,8 @@ class MooringTerminal(BaseModel):
 class WebhookRequest(BaseModel):
     berth_name: str
     bollard_name: str
-    hook_id: str
-    tension: int
-    colour: Optional[str]
+    colour: Optional[str] = Field(default=None)
+    alert: bool = Field(default=False)
+    # Optional fields for backward compatibility
+    hook_id: Optional[str] = Field(default=None)
+    tension: Optional[int] = Field(default=None)

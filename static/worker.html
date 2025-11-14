@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Worker View - Mooring Status</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background: #f5f5f5;
+      color: #111;
+    }
+    h2 {
+      margin: 16px 0 8px;
+      text-align: center;
+      font-weight: 700;
+    }
+    #root {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
+    }
+    .view-panel {
+      background: #ddd;
+      border-radius: 6px;
+      padding: 16px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    }
+    svg {
+      background: #d3d3d3;
+      border-radius: 6px;
+      display: block;
+    }
+
+    #groupHeaders {
+      display: flex;
+      justify-content: space-between;
+      padding: 0 40px 4px 40px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .legend {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      font-size: 12px;
+      margin-top: 6px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      border: 1px solid #444;
+    }
+    .red    { background: red; }
+    .green  { background: green; }
+    .yellow { background: yellow; }
+    .black  { background: black; }
+
+    #alarmBanner {
+      margin: 4px auto 0;
+      width: fit-content;
+      padding: 6px 12px;
+      border-radius: 4px;
+      background: #b71c1c;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      display: none;
+    }
+
+    #meta {
+      text-align: center;
+      margin-top: 6px;
+      font-size: 12px;
+    }
+
+    .worker-badge {
+      background: #4caf50;
+      color: white;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* floating colour picker */
+    #colorPicker {
+      position: fixed;
+      display: none;
+      background: #333;
+      border: 1px solid #555;
+      padding: 6px 8px;
+      border-radius: 4px;
+      z-index: 1000;
+      font-size: 12px;
+      color: #eee;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    }
+    #colorPicker select,
+    #colorPicker button {
+      font-size: 12px;
+      margin-left: 4px;
+    }
+    #colorPicker button {
+      background: #444;
+      color: #eee;
+      border: 1px solid #666;
+      border-radius: 3px;
+      padding: 2px 6px;
+      cursor: pointer;
+    }
+    #colorPicker button:hover {
+      background: #555;
+    }
+  </style>
+</head>
+<body>
+<div id="root">
+  <h2>Mooring Status <span class="worker-badge">Worker View</span></h2>
+
+  <div class="view-panel">
+    <div id="groupHeaders">
+      <div>Recommended<br>Colour</div>
+      <div>Selected<br>Colour</div>
+    </div>
+    <svg id="svgMain" width="420" height="520"></svg>
+  </div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-color red"></div>red = tighten</div>
+    <div class="legend-item"><div class="legend-color green"></div>green = slacken</div>
+    <div class="legend-item"><div class="legend-color yellow"></div>yellow = small / none</div>
+    <div class="legend-item"><div class="legend-color black"></div>black = alert / unsafe</div>
+  </div>
+
+  <div id="alarmBanner">⚠️ ALERT STATUS ACTIVE</div>
+  <div id="meta"></div>
+  <div style="text-align: center; margin-top: 12px;">
+    <a href="/static/ships.html" style="color: #667eea; text-decoration: none; font-size: 14px; font-weight: 600;">
+      ← Back to Ship Selection
+    </a>
+  </div>
+</div>
+
+<!-- Floating bollard colour picker -->
+<div id="colorPicker">
+  <label>
+    Mode:
+    <select id="colorSelect">
+      <option value="">Auto</option>
+      <option value="red">Red (tighten, +5)</option>
+      <option value="green">Green (slacken, -5)</option>
+      <option value="yellow">Yellow (0)</option>
+      <option value="alert">Alert</option>
+    </select>
+  </label>
+  <button id="colorApply">Apply</button>
+  <button id="colorCancel">X</button>
+</div>
+
+<script>
+  // === config ===
+  const urlParams = new URLSearchParams(window.location.search);
+  const SHIP_ID = urlParams.get('ship_id') || '9564';
+  const API_URL = `/ships/${SHIP_ID}`;
+
+  const svgMain = document.getElementById('svgMain');
+  const NS      = 'http://www.w3.org/2000/svg';
+
+  const WIDTH  = 420;
+  const HEIGHT = 520;
+
+  const BERTH_X = 110;
+  const SHIP_L  = 360;
+  const SHIP_W  = 120;
+  const MIN_GAP = 15;
+
+  const SAFETY_LIMIT = 90;
+  const ANGLE_THRESH = Math.PI / 180;
+  const OVERRIDE_TTL_MS = 5000;
+
+  // per-bollard overrides
+  const bollardOverrides = {};      // name -> 'red'|'green'|'yellow'|'alert'
+  const bollardExpiry    = {};      // name -> timestamp
+
+  // meta
+  let lastData = null;
+
+  // floating picker state
+  const picker     = document.getElementById('colorPicker');
+  const pickerSel  = document.getElementById('colorSelect');
+  const pickerApply= document.getElementById('colorApply');
+  const pickerCancel=document.getElementById('colorCancel');
+  let pickerCtx = null;      // { bollardName }
+
+  function clearSvg(svg) {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+  }
+
+  function el(name, attrs={}) {
+    const e = document.createElementNS(NS, name);
+    for (const [k,v] of Object.entries(attrs)) e.setAttribute(k,v);
+    return e;
+  }
+
+  function rotate(x, y, a) {
+    const c = Math.cos(a), s = Math.sin(a);
+    return { x: x*c - y*s, y: x*s + y*c };
+  }
+
+  function purgeOverrides() {
+    const now = Date.now();
+    for (const [k, t] of Object.entries(bollardExpiry)) {
+      if (t <= now) {
+        delete bollardExpiry[k];
+        delete bollardOverrides[k];
+      }
+    }
+  }
+
+  function overrideDelta(mode) {
+    if (mode === 'red') return +5;
+    if (mode === 'green') return -5;
+    return 0;   // yellow or alert
+  }
+
+  function hullAnchor(geom, lineType, bollardIndex, totalBollards, tAlong) {
+    const L = SHIP_L;
+    const compress = 0.6;
+
+    let yLocal;
+
+    switch (lineType) {
+      case 'HEAD':
+        yLocal = -0.5 * L * compress;
+        break;
+      case 'STERN':
+        yLocal = 0.5 * L * compress;
+        break;
+      case 'SPRING': {
+        const frontHalf = bollardIndex < totalBollards / 2;
+        yLocal = (frontHalf ? 0.3 : -0.3) * L * compress;
+        break;
+      }
+      case 'BREAST':
+      default:
+        yLocal = (tAlong - 0.5) * L * compress;
+        break;
+    }
+
+    const localX = -geom.halfW;
+    const r = rotate(localX, yLocal, geom.angle);
+    return { x: r.x + geom.cx, y: r.y + geom.cy };
+  }
+
+  function computeShipGeom(angleRad, radars) {
+    const rawAngle = angleRad || 0;
+
+    const active = (radars || [])
+      .filter(r => r.is_active && r.distance != null)
+      .map(r => r.distance);
+
+    const avgDistM = active.length
+      ? active.reduce((a,b)=>a+b,0) / active.length
+      : 10;
+
+    const M_TO_PX = 6;
+    let distPx = avgDistM * M_TO_PX;
+    if (distPx < 40) distPx = 40;
+
+    const cx0 = BERTH_X + distPx + SHIP_W / 2;
+    const cy  = HEIGHT / 2;
+
+    const halfL = SHIP_L / 2;
+    const halfW = SHIP_W / 2;
+
+    const bowInset   = SHIP_L * 0.18;
+    const sternInset = SHIP_L * 0.10;
+
+    const localHull = [
+      { x: -halfW,      y: -halfL + bowInset },
+      { x:  0,          y: -halfL            },
+      { x:  halfW,      y: -halfL + bowInset },
+      { x:  halfW,      y:  halfL - sternInset },
+      { x:  halfW * 0.6,y:  halfL            },
+      { x: -halfW * 0.6,y:  halfL            },
+      { x: -halfW,      y:  halfL - sternInset }
+    ];
+
+    const rotated = localHull.map(p => {
+      const r = rotate(p.x, p.y, rawAngle);
+      return { x: r.x + cx0, y: r.y + cy };
+    });
+
+    let minX = Math.min(...rotated.map(p => p.x));
+    let offX = 0;
+    if (minX < BERTH_X + MIN_GAP) {
+      offX = (BERTH_X + MIN_GAP) - minX;
+    }
+
+    const hull = rotated.map(p => ({ x: p.x + offX, y: p.y }));
+
+    return {
+      angle: rawAngle,
+      cx: cx0 + offX,
+      cy,
+      halfL,
+      halfW,
+      hull
+    };
+  }
+
+  function suggestedHookColour(hook) {
+    if (hook.colour) return hook.colour;
+    return 'yellow';
+  }
+
+  function aggColours(colours) {
+    if (colours.includes('black')) return 'black';
+    if (colours.includes('red'))   return 'red';
+    if (colours.includes('green')) return 'green';
+    return 'yellow';
+  }
+
+  function drawGroupView(data) {
+    clearSvg(svgMain);
+    if (!data || !data.statistics) return;
+
+    const angle = (data.statistics.orientation_angle || 0) * Math.PI / 180;
+    const geom  = computeShipGeom(angle, data.radars);
+
+    // berth line
+    svgMain.appendChild(el('line', {
+      x1: BERTH_X, y1: 40,
+      x2: BERTH_X, y2: HEIGHT-40,
+      stroke: '#999', 'stroke-width': 6
+    }));
+
+    // ship hull
+    const d = geom.hull.map((p,i)=> (i ? 'L' : 'M') + p.x + ' ' + p.y).join(' ') + ' Z';
+    svgMain.appendChild(el('path', {
+      d,
+      fill: '#64b5f6', 'fill-opacity': 0.9,
+      stroke: '#4a90e2', 'stroke-width': 2
+    }));
+
+    const bollards = data.bollards || [];
+    const n = bollards.length || 1;
+    const yMin = 80, yMax = HEIGHT-80;
+
+    const alarmBanner = document.getElementById('alarmBanner');
+    const hasLocalAlert = Object.values(bollardOverrides).includes('alert');
+    const hasServerAlert = bollards.some(b => b.alert === true);
+    alarmBanner.style.display = (hasLocalAlert || hasServerAlert) ? 'block' : 'none';
+
+    bollards.forEach((b, idx) => {
+      const t = n===1 ? 0.5 : idx/(n-1);
+      const bollY = yMin + t*(yMax-yMin);
+
+      const hooks = b.hooks || [];
+
+      // Pick a representative line type for this bollard
+      const mainType =
+        (hooks.find(h => h.line_type)?.line_type) ||
+        (hooks[0]?.line_type) ||
+        'BREAST';
+
+      const anchor = hullAnchor(geom, mainType, idx, n, t);
+      const hullX  = anchor.x;
+      const hullY  = anchor.y;
+
+      // recommended colour per bollard from hook colours
+      const hookCols = hooks.map(h => suggestedHookColour(h));
+      const recommended = aggColours(hookCols);
+
+      // draw recommended square on left column
+      const squareX = 40;
+      svgMain.appendChild(el('rect', {
+        x: squareX-14, y: bollY-14,
+        width: 28, height: 28,
+        fill: recommended,
+        stroke:'#444','stroke-width':1.5
+      }));
+
+      // selected colour: angle-only + override
+      const isBack = idx < n/2;
+      let baseDesired = 0;
+      if (angle > ANGLE_THRESH) {
+        baseDesired += isBack ? -5 : 5;
+      } else if (angle < -ANGLE_THRESH) {
+        baseDesired += isBack ? 5 : -5;
+      }
+
+      // Read override from server (bollard.colour) or local override
+      // Server colour takes precedence over local override unless locally set
+      const serverColour = b.colour && b.colour !== 'Grey' ? b.colour.toLowerCase() : '';
+      const localOverride = bollardOverrides[b.name] || '';
+      const ov = localOverride || serverColour;
+      const dOv = overrideDelta(ov);
+      let desired = baseDesired + dOv;
+
+      // safety clamp using *average* tension
+      const tensions = hooks.map(h => (h.tension ?? 0));
+      const meanT = tensions.length
+        ? tensions.reduce((a,x)=>a+x,0)/tensions.length
+        : 0;
+      if (desired > SAFETY_LIMIT - meanT) {
+        desired = SAFETY_LIMIT - meanT;
+      }
+
+      // --- choose line colour ---
+      let lineColor;
+      if (ov === 'alert') {
+        lineColor = 'black';
+      } else if (ov === 'red' || ov === 'green' || ov === 'yellow') {
+        lineColor = ov;
+      } else {
+        // automatic suggestion based on desired change
+        if (desired > 5) {
+          lineColor = 'red';
+        } else if (desired < -5) {
+          lineColor = 'green';
+        } else {
+          lineColor = 'yellow';
+        }
+      }
+
+      // selected line (single rope per bollard)
+      const sx = hullX;
+      const sy = hullY;
+      const ex = BERTH_X;
+      const ey = bollY;
+
+      const line = el('line', {
+        x1:sx,y1:sy,x2:ex,y2:ey,
+        stroke: lineColor,
+        'stroke-width': ov === 'alert' ? 4.5 : 3,
+        'stroke-linecap':'round'
+      });
+      if (ov === 'alert') line.setAttribute('stroke-dasharray','4,3');
+
+      // click handler for override
+      line.style.cursor = 'pointer';
+      line.addEventListener('click', (evt) => {
+        pickerCtx = { bollard: b.name };
+        pickerSel.value = ov || '';
+        picker.style.left = `${evt.clientX+8}px`;
+        picker.style.top  = `${evt.clientY+8}px`;
+        picker.style.display = 'block';
+      });
+
+      svgMain.appendChild(line);
+
+      // bollard marker
+      svgMain.appendChild(el('rect', {
+        x: BERTH_X-8, y: bollY-8, width: 16, height: 16,
+        fill: '#bbb', stroke: '#777', 'stroke-width': 1.2
+      }));
+    });
+  }
+
+  function updateMeta(data) {
+    const meta = document.getElementById('meta');
+    if (!data || !data.statistics) {
+      meta.textContent = '';
+      return;
+    }
+    const ang = (data.statistics.orientation_angle || 0).toFixed(2);
+    meta.textContent =
+      `${data.ship.name} @ ${data.berth} | angle ${ang}° | total tension ${data.statistics.total_tension}`;
+  }
+
+  async function fetchAndRender() {
+    try {
+      purgeOverrides();
+      const res = await fetch(API_URL);
+      if (!res.ok) {
+        console.error('Failed to fetch ship data:', res.status);
+        return;
+      }
+
+      const data = await res.json();
+      lastData = data;
+
+      drawGroupView(data);
+      updateMeta(data);
+    } catch (err) {
+      console.error('fetch/render error', err);
+    }
+  }
+
+  // colour picker events
+  pickerApply.addEventListener('click', async () => {
+    if (!pickerCtx) {
+      picker.style.display = 'none';
+      return;
+    }
+    const name = pickerCtx.bollard;
+    const val  = pickerSel.value;
+
+    // Determine colour and alert status
+    let colour = '';
+    let alert = false;
+
+    if (!val) {
+      delete bollardOverrides[name];
+      delete bollardExpiry[name];
+    } else {
+      bollardOverrides[name] = val;
+      bollardExpiry[name]    = Date.now() + OVERRIDE_TTL_MS;
+
+      // Map the selection to colour and alert
+      if (val === 'alert') {
+        colour = 'black';
+        alert = true;
+      } else {
+        colour = val;  // 'red', 'green', or 'yellow'
+        alert = false;
+      }
+
+      // Send webhook request
+      if (lastData && lastData.berth) {
+        try {
+          const webhookPayload = {
+            berth_name: lastData.berth,
+            bollard_name: name,
+            colour: colour,
+            alert: alert
+          };
+
+          console.log('Sending webhook:', webhookPayload);
+
+          const response = await fetch('/webhook', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(webhookPayload)
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Webhook request failed:', response.status, response.statusText, errorText);
+          } else {
+            const result = await response.json();
+            console.log('Webhook success:', result);
+          }
+        } catch (error) {
+          console.error('Error sending webhook:', error);
+        }
+      }
+    }
+
+    picker.style.display = 'none';
+    pickerCtx = null;
+
+    if (lastData) {
+      drawGroupView(lastData);
+      updateMeta(lastData);
+    }
+  });
+
+  pickerCancel.addEventListener('click', () => {
+    picker.style.display = 'none';
+    pickerCtx = null;
+  });
+
+  // Start fetching and rendering
+  fetchAndRender();
+  setInterval(fetchAndRender, 5000);  // Refresh every 5 seconds
+</script>
+</body>
+</html>
