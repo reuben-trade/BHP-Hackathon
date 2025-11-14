@@ -157,6 +157,43 @@
       transform: translateY(-2px);
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
     }
+
+    .view-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .view-button {
+      flex: 1;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .view-button.captain {
+      background: #667eea;
+      color: white;
+    }
+
+    .view-button.captain:hover {
+      background: #5568d3;
+      transform: translateY(-1px);
+    }
+
+    .view-button.worker {
+      background: #4ade80;
+      color: white;
+    }
+
+    .view-button.worker:hover {
+      background: #22c55e;
+      transform: translateY(-1px);
+    }
   </style>
 </head>
 <body>
@@ -351,7 +388,7 @@
 
         // Render ships
         const shipsHtml = ships.map(ship => `
-          <div class="ship-card active" onclick="selectShip('${ship.vesselId}')">
+          <div class="ship-card active">
             <h3>${ship.name}</h3>
             <div class="ship-info">
               <strong>Vessel ID:</strong> ${ship.vesselId}
@@ -363,6 +400,10 @@
               <strong>Total Tension:</strong> ${ship.totalTension ? ship.totalTension.toFixed(1) + ' kN' : 'N/A'}
             </div>
             <span class="status-badge active">Active</span>
+            <div class="view-buttons">
+              <button class="view-button captain" onclick="selectShip('${ship.vesselId}', 'captain')">Captain View</button>
+              <button class="view-button worker" onclick="selectShip('${ship.vesselId}', 'worker')">Worker View</button>
+            </div>
           </div>
         `).join('');
 
@@ -395,9 +436,10 @@
       return 'loading';
     }
 
-    function selectShip(vesselId) {
+    function selectShip(vesselId, viewType = 'captain') {
       if (vesselId && vesselId !== 'loading') {
-        window.location.href = `/static/captain.html?ship_id=${vesselId}`;
+        const page = viewType === 'worker' ? 'worker.html' : 'captain.html';
+        window.location.href = `/static/${page}?ship_id=${vesselId}`;
       }
     }
 
