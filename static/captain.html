@@ -153,6 +153,11 @@
 
   <div id="alarmBanner">ALERT OVERRIDE ACTIVE</div>
   <div id="meta"></div>
+  <div style="text-align: center; margin-top: 12px;">
+    <a href="/static/ships.html" style="color: #667eea; text-decoration: none; font-size: 14px; font-weight: 600;">
+      ← Back to Ship Selection
+    </a>
+  </div>
 </div>
 
 <!-- Floating bollard colour picker -->
@@ -173,7 +178,9 @@
 
 <script>
   // === config ===
-  const SHIP_ID = '9564';         // set to your vesselId
+  // Get ship ID from URL parameter
+  const urlParams = new URLSearchParams(window.location.search);
+  const SHIP_ID = urlParams.get('ship_id') || '9564';  // fallback to default if not provided
   const API_URL = `/ships/${SHIP_ID}`;
 
   const svgInd  = document.getElementById('svgIndividual');
@@ -585,20 +592,64 @@
   }
 
   // colour picker events
-  pickerApply.addEventListener('click', () => {
+  pickerApply.addEventListener('click', async () => {
     if (!pickerCtx) {
       picker.style.display = 'none';
       return;
     }
     const name = pickerCtx.bollard;
     const val  = pickerSel.value;
+
+    // Determine colour and alert status
+    let colour = '';
+    let alert = false;
+
     if (!val) {
       delete bollardOverrides[name];
       delete bollardExpiry[name];
     } else {
       bollardOverrides[name] = val;
       bollardExpiry[name]    = Date.now() + OVERRIDE_TTL_MS;
+
+      // Map the selection to colour and alert
+      if (val === 'alert') {
+        colour = 'black';
+        alert = true;
+      } else {
+        colour = val;  // 'red', 'green', or 'yellow'
+        alert = false;
+      }
+
+      // Send webhook request
+      if (lastData && lastData.berth) {
+        try {
+          const webhookPayload = {
+            berth_name: lastData.berth,
+            bollard_name: name,
+            colour: colour,
+            alert: alert
+          };
+
+          const response = await fetch('/webhook', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(webhookPayload)
+          });
+
+          if (!response.ok) {
+            console.error('Webhook request failed:', response.status, response.statusText);
+          } else {
+            const result = await response.json();
+            console.log('Webhook success:', result);
+          }
+        } catch (error) {
+          console.error('Error sending webhook:', error);
+        }
+      }
     }
+
     picker.style.display = 'none';
     pickerCtx = null;
 

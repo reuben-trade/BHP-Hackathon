@@ -167,11 +167,31 @@ async def get_ship_data(ship_id: str):
 @app.post("/webhook")
 async def webhook(payload: WebhookRequest):
     """Receive webhook, update bollard colour upon request & process alert"""
-    current_berth = current_data.get_berth_by_name(payload.berth_id)
+    if current_data is None:
+        raise HTTPException(status_code=404, detail="No data available")
+
+    current_berth = current_data.get_berth_by_name(payload.berth_name)
+    if current_berth is None:
+        raise HTTPException(status_code=404, detail=f"Berth {payload.berth_name} not found")
+
     target_bollard = current_berth.get_bollard_by_name(payload.bollard_name)
-    target_bollard.colour = payload.colour
-    if target_bollard.colour == "Black":
-        target_bollard.alert = True
+    if target_bollard is None:
+        raise HTTPException(status_code=404, detail=f"Bollard {payload.bollard_name} not found")
+
+    # Update bollard colour if provided
+    if payload.colour:
+        target_bollard.colour = payload.colour
+
+    # Update alert status
+    target_bollard.alert = payload.alert
+
+    return {
+        "status": "success",
+        "berth": payload.berth_name,
+        "bollard": payload.bollard_name,
+        "colour": target_bollard.colour,
+        "alert": target_bollard.alert
+    }
 
 
 @app.get("/terminal/status")

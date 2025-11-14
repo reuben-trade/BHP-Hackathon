@@ -189,6 +189,8 @@ class MooringTerminal(BaseModel):
 class WebhookRequest(BaseModel):
     berth_name: str
     bollard_name: str
-    hook_id: str
-    tension: int
-    colour: Optional[str]
+    colour: Optional[str] = None
+    alert: bool = False
+    # Optional fields for backward compatibility
+    hook_id: Optional[str] = None
+    tension: Optional[int] = None
