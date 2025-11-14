@@ -14,7 +14,7 @@ class ConnectionManager:
         self.active_connections.append(websocket)
         # Send current data immediately upon connection
         if self.current_data:
-            await websocket.send_json(self.current_data.model_dump_json())
+            await websocket.send_json(self.current_data.model_dump(mode='json'))
 
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)

@@ -43,242 +43,249 @@
     </style>
 </head>
 <body>
-    <div id="root"></div>
+<div id="root"></div>
 
-    <script type="text/babel">
-        const { useState, useEffect, useCallback } = React;
+<script type="text/babel">
+    const { useState, useEffect } = React;
 
-        // Lucide React Icons (simple implementations)
-        const AlertCircle = ({ className, size = 24 }) => (
-            <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width={size}
-                height={size}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className={className}
-            >
-                <circle cx="12" cy="12" r="10"></circle>
-                <line x1="12" y1="8" x2="12" y2="12"></line>
-                <line x1="12" y1="16" x2="12.01" y2="16"></line>
-            </svg>
-        );
+    /* ---------- Global config ---------- */
 
-        const X = ({ size = 24 }) => (
-            <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width={size}
-                height={size}
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-            >
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-        );
+    // Always use port 8000 for the backend
+    const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:8000`;
 
-        // Color calculation functions
-        const getLineColorGrey = () => '#9CA3AF';
-        const getBoxColor = () => '#BFDBFE';
+    const getShipIdFromPath = () => {
+        const path = window.location.pathname;
+        const segments = path.split('/').filter(Boolean); // remove empty
+        const idx = segments.indexOf('ships');
+        if (idx !== -1 && segments.length > idx + 1) {
+            return decodeURIComponent(segments[idx + 1]);
+        }
+        return null;
+    };
 
-        const getTensionColor = (tension) => {
-            if (tension === null || tension === undefined) return '#6B7280';
-            if (tension < 50) return '#10B981';
-            if (tension < 150) return '#3B82F6';
-            if (tension < 250) return '#F59E0B';
-            return '#EF4444';
-        };
+    /* ---------- Icons ---------- */
 
-        // Alarm Modal Component
-        const AlarmModal = ({ onClose, onSendAlarm, hookName }) => {
-            return (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 shadow-xl max-w-md">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold text-gray-900">Send Alarm</h3>
-                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <p className="text-gray-700 mb-6">
-                            Send alarm notification for hook: <span className="font-semibold">{hookName}</span>
-                        </p>
-                        <div className="flex gap-3 justify-end">
-                            <button
-                                onClick={onClose}
-                                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={onSendAlarm}
-                                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2"
-                            >
-                                <AlertCircle size={18} />
-                                Send Alarm
-                            </button>
-                        </div>
-                    </div>
+    const AlertCircle = ({ className, size = 24 }) => (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={className}
+        >
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+    );
+
+    const X = ({ size = 24 }) => (
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        >
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+    );
+
+    /* ---------- Colour helpers ---------- */
+
+    const getLineColorGrey = () => '#9CA3AF';
+    const getBoxColor = () => '#BFDBFE';
+
+    const getTensionColor = (tension) => {
+        if (tension === null || tension === undefined) return '#6B7280';
+        if (tension < 50) return '#10B981';
+        if (tension < 150) return '#3B82F6';
+        if (tension < 250) return '#F59E0B';
+        return '#EF4444';
+    };
+
+    /* ---------- Modals ---------- */
+
+    const AlarmModal = ({ onClose, onSendAlarm, hookName }) => (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 shadow-xl max-w-md">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Send Alarm</h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                        <X size={20} />
+                    </button>
                 </div>
-            );
-        };
-
-        // Color Selection Modal Component
-        const ColorSelectionModal = ({ onClose, onSelectColor, bollardName }) => {
-            const colors = [
-                { name: 'Recommended', value: 'recommended', color: getBoxColor() },
-                { name: 'Green', value: 'green', color: '#10B981' },
-                { name: 'Yellow', value: 'yellow', color: '#F59E0B' },
-                { name: 'Red', value: 'red', color: '#EF4444' },
-                { name: 'Black', value: 'black', color: '#1F2937' }
-            ];
-
-            return (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 shadow-xl max-w-md">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold text-gray-900">Select Color</h3>
-                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-                                <X size={20} />
-                            </button>
-                        </div>
-                        <p className="text-gray-700 mb-4">
-                            Choose color for: <span className="font-semibold">{bollardName}</span>
-                        </p>
-                        <div className="space-y-2">
-                            {colors.map((colorOption) => (
-                                <button
-                                    key={colorOption.value}
-                                    onClick={() => onSelectColor(colorOption.value)}
-                                    className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
-                                >
-                                    <div
-                                        className="w-8 h-8 rounded border border-gray-300"
-                                        style={{ backgroundColor: colorOption.color }}
-                                    />
-                                    <span className="font-medium">{colorOption.name}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                <p className="text-gray-700 mb-6">
+                    Send alarm notification for hook: <span className="font-semibold">{hookName}</span>
+                </p>
+                <div className="flex gap-3 justify-end">
+                    <button
+                        onClick={onClose}
+                        className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        onClick={onSendAlarm}
+                        className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2"
+                    >
+                        <AlertCircle size={18} />
+                        Send Alarm
+                    </button>
                 </div>
-            );
-        };
+            </div>
+        </div>
+    );
 
-        // Individual Hook Line Component - Bird's Eye View
-        const HookLine = ({ hook, bollardY, shipX, shipY, shipWidth, shipLength, onHookClick }) => {
-            const lineColor = getLineColorGrey();
-            const tensionColor = getTensionColor(hook.tension);
+    const ColorSelectionModal = ({ onClose, onSelectColor, lineName }) => {
+        const colors = [
+            { name: 'Green', value: 'green', color: '#10B981' },
+            { name: 'Yellow', value: 'yellow', color: '#F59E0B' },
+            { name: 'Red', value: 'red', color: '#EF4444' },
+            { name: 'Black', value: 'black', color: '#1F2937' }
+        ];
 
-            // Start from bollard position (left side)
-            const startX = 120;
-            const startY = bollardY;
-
-            // End at ship - position based on line type
-            let endX = shipX;
-            let endY = shipY;
-
-            // Position lines based on type
-            if (hook.line_type === 'HEAD') {
-                endX = shipX + shipWidth * 0.3;
-                endY = shipY + 20; // Front of ship
-            } else if (hook.line_type === 'STERN') {
-                endX = shipX + shipWidth * 0.3;
-                endY = shipY + shipLength - 20; // Back of ship
-            } else if (hook.line_type === 'BREAST') {
-                endX = shipX;
-                endY = startY; // Perpendicular to bollard
-            } else if (hook.line_type === 'SPRING_FWD' || hook.line_type === 'SPRING_AFT') {
-                endX = shipX + shipWidth * 0.2;
-                endY = shipY + shipLength * 0.5; // Middle of ship
-            } else {
-                // Default position
-                endX = shipX + shipWidth * 0.3;
-                endY = startY;
-            }
-
-            return (
-                <g>
-                    {/* Tension label next to bollard */}
-                    <text
-                        x={startX - 10}
-                        y={startY + 5}
-                        textAnchor="end"
-                        className="text-sm font-semibold"
-                        fill={tensionColor}
-                    >
-                        {hook.tension?.toFixed(1) || 'N/A'}
-                    </text>
-
-                    {/* Mooring line */}
-                    <line
-                        x1={startX}
-                        y1={startY}
-                        x2={endX}
-                        y2={endY}
-                        stroke={lineColor}
-                        strokeWidth="3"
-                        className="cursor-pointer hover:opacity-75 transition-opacity"
-                        onClick={() => onHookClick(hook)}
-                        strokeDasharray={hook.is_active ? "0" : "5,5"}
-                    />
-
-                    {/* Hook label */}
-                    <text
-                        x={startX - 15}
-                        y={startY + 20}
-                        className="text-xs"
-                        fill="#6B7280"
-                        textAnchor="end"
-                    >
-                        {hook.name}
-                    </text>
-                </g>
-            );
-        };
-
-        // Bird's Eye View - Individual View (shows all bollards with detailed hooks)
-        const BirdsEyeIndividualView = ({ shipData, onHookClick }) => {
-            const svgWidth = 1000;
-            const svgHeight = 600;
-
-            // Ship dimensions and position
-            const shipWidth = 180;
-            const shipLength = 450;
-            const shipX = 350;
-            const shipY = 75;
-
-            // Dock/Berth area
-            const dockX = 50;
-            const dockY = 50;
-            const dockWidth = 120;
-            const dockHeight = 500;
-
-            // Calculate bollard positions
-            const bollardSpacing = dockHeight / (shipData.bollards.length + 1);
-
-            return (
-                <div className="bg-white rounded-lg shadow-md p-6">
-                    <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                        Individual View - Birds Eye Perspective
-                    </h2>
-                    <p className="text-sm text-gray-600 mb-4">
-                        Click on any mooring line to send an alarm
+        return (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 shadow-xl max-w-md">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900">Select Line Color</h3>
+                        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                            <X size={20} />
+                        </button>
+                    </div>
+                    <p className="text-gray-700 mb-4">
+                        Choose color for mooring line: <span className="font-semibold">{lineName}</span>
                     </p>
+                    <div className="space-y-2">
+                        {colors.map((colorOption) => (
+                            <button
+                                key={colorOption.value}
+                                onClick={() => onSelectColor(colorOption.value)}
+                                className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+                            >
+                                <div
+                                    className="w-8 h-8 rounded border border-gray-300"
+                                    style={{ backgroundColor: colorOption.color }}
+                                />
+                                <span className="font-medium">{colorOption.name}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    };
 
+    /* ---------- Birds Eye Views ---------- */
+
+    const BirdsEyeIndividualView = ({ shipData, onHookClick }) => {
+        const svgWidth = 900;
+        const svgHeight = 800;
+
+        const totalActiveHooks = shipData.bollards.reduce(
+            (sum, bollard) => sum + bollard.hooks.filter(h => h.is_active).length,
+            0
+        );
+
+        const bollardCount = shipData.bollards.length;
+        const shipWidth = 180;
+        const shipLength = Math.max(600, totalActiveHooks * 35);
+        const shipX = 400;
+        const shipY = (svgHeight - shipLength) / 2;
+
+        const orientationAngle = shipData.statistics.orientation_angle || 0;
+
+        const dockX = 50;
+        const dockY = Math.max(50, shipY - 50);
+        const dockWidth = 120;
+        const dockHeight = shipLength + 100;
+
+        const bollardSpacing = dockHeight / (bollardCount + 1);
+
+        const shipCenterX = shipX + shipWidth / 2;
+        const shipCenterY = shipY + shipLength / 2;
+
+        const hooksByType = {
+            HEAD: [],
+            SPRING_FWD: [],
+            BREAST: [],
+            SPRING_AFT: [],
+            STERN: [],
+            OTHER: []
+        };
+
+        const allHookConnections = [];
+        shipData.bollards.forEach((bollard, bollardIndex) => {
+            const activeHooks = bollard.hooks.filter(h => h.is_active);
+            activeHooks.forEach((hook, hookIndex) => {
+                const bollardY = dockY + (bollardIndex + 1) * bollardSpacing;
+                const lineY = bollardY + (hookIndex - activeHooks.length / 2) * 25;
+
+                const conn = {
+                    bollard,
+                    bollardIndex,
+                    bollardY,
+                    hook,
+                    lineY
+                };
+
+                allHookConnections.push(conn);
+
+                const lineType = hook.line_type || 'OTHER';
+                if (hooksByType[lineType]) {
+                    hooksByType[lineType].push(conn);
+                } else {
+                    hooksByType.OTHER.push(conn);
+                }
+            });
+        });
+
+        const assignPositions = (hooks, startPercent, endPercent) => {
+            hooks.forEach((conn, idx) => {
+                const progress = hooks.length > 1 ? idx / (hooks.length - 1) : 0.5;
+                const rangeStart = shipY + shipLength * startPercent;
+                const rangeEnd = shipY + shipLength * endPercent;
+                conn.attachmentY = rangeStart + (rangeEnd - rangeStart) * progress;
+
+                if (conn.hook.line_type === 'BREAST') {
+                    conn.attachmentX = shipX;
+                } else {
+                    conn.attachmentX = shipX + shipWidth * 0.3;
+                }
+            });
+        };
+
+        assignPositions(hooksByType.HEAD, 0.05, 0.20);
+        assignPositions(hooksByType.SPRING_FWD, 0.25, 0.40);
+        assignPositions(hooksByType.BREAST, 0.42, 0.58);
+        assignPositions(hooksByType.SPRING_AFT, 0.60, 0.75);
+        assignPositions(hooksByType.STERN, 0.80, 0.95);
+        assignPositions(hooksByType.OTHER, 0.40, 0.60);
+
+        return (
+            <div className="bg-white rounded-lg shadow-md p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                    Individual View - Birds Eye Perspective
+                </h2>
+                <p className="text-sm text-gray-600 mb-4">
+                    Click on any mooring line to send an alarm
+                </p>
+
+                <div className="overflow-auto">
                     <svg width={svgWidth} height={svgHeight} className="border border-gray-200 rounded bg-blue-50">
-                        {/* Water background */}
                         <rect x={0} y={0} width={svgWidth} height={svgHeight} fill="#DBEAFE" />
 
-                        {/* Dock/Berth area */}
                         <rect
                             x={dockX}
                             y={dockY}
@@ -292,9 +299,7 @@
                             DOCK
                         </text>
 
-                        {/* Ship - boat shape from above */}
-                        <g>
-                            {/* Main hull - elongated oval/boat shape */}
+                        <g transform={`rotate(${orientationAngle} ${shipCenterX} ${shipCenterY})`}>
                             <ellipse
                                 cx={shipX + shipWidth / 2}
                                 cy={shipY + shipLength / 2}
@@ -306,7 +311,6 @@
                                 opacity="0.85"
                             />
 
-                            {/* Bow (front) - pointed */}
                             <path
                                 d={`M ${shipX + shipWidth / 2} ${shipY}
                                     L ${shipX + shipWidth * 0.2} ${shipY + 40}
@@ -316,7 +320,6 @@
                                 opacity="0.9"
                             />
 
-                            {/* Ship label */}
                             <text
                                 x={shipX + shipWidth / 2}
                                 y={shipY + shipLength / 2}
@@ -327,7 +330,6 @@
                                 VESSEL
                             </text>
 
-                            {/* Bow/Stern labels */}
                             <text
                                 x={shipX + shipWidth / 2}
                                 y={shipY + 20}
@@ -348,14 +350,12 @@
                             </text>
                         </g>
 
-                        {/* Bollards and mooring lines */}
                         {shipData.bollards.map((bollard, bollardIndex) => {
                             const bollardY = dockY + (bollardIndex + 1) * bollardSpacing;
                             const bollardX = dockX + dockWidth;
 
                             return (
                                 <g key={bollard.name}>
-                                    {/* Bollard */}
                                     <circle
                                         cx={bollardX}
                                         cy={bollardY}
@@ -365,7 +365,6 @@
                                         strokeWidth="2"
                                     />
 
-                                    {/* Bollard label */}
                                     <text
                                         x={dockX + 10}
                                         y={bollardY + 5}
@@ -375,86 +374,196 @@
                                         {bollard.name}
                                     </text>
 
-                                    {/* Mooring lines from this bollard */}
                                     {bollard.hooks.filter(h => h.is_active).map((hook, hookIndex) => {
-                                        const lineY = bollardY + (hookIndex - bollard.hooks.filter(h => h.is_active).length / 2) * 25;
+                                        const lineY =
+                                            bollardY +
+                                            (hookIndex - bollard.hooks.filter(h => h.is_active).length / 2) * 25;
+
+                                        const connection = allHookConnections.find(
+                                            c => c.bollard.name === bollard.name && c.hook.name === hook.name
+                                        );
+
+                                        if (!connection) return null;
+
+                                        const lineColor = getLineColorGrey();
+                                        const tensionColor = getTensionColor(hook.tension);
+                                        const startX = bollardX;
+                                        const startY = lineY;
+                                        const endX = connection.attachmentX;
+                                        const endY = connection.attachmentY;
+
                                         return (
-                                            <HookLine
-                                                key={hook.name}
-                                                hook={hook}
-                                                bollardY={lineY}
-                                                shipX={shipX}
-                                                shipY={shipY}
-                                                shipWidth={shipWidth}
-                                                shipLength={shipLength}
-                                                onHookClick={onHookClick}
-                                            />
+                                            <g key={hook.name}>
+                                                <text
+                                                    x={startX - 10}
+                                                    y={startY + 5}
+                                                    textAnchor="end"
+                                                    className="text-sm font-semibold"
+                                                    fill={tensionColor}
+                                                >
+                                                    {hook.tension?.toFixed(1) || 'N/A'}
+                                                </text>
+
+                                                <line
+                                                    x1={startX}
+                                                    y1={startY}
+                                                    x2={endX}
+                                                    y2={endY}
+                                                    stroke={lineColor}
+                                                    strokeWidth="3"
+                                                    className="cursor-pointer hover:opacity-75 transition-opacity"
+                                                    onClick={() => onHookClick(hook, bollard.name)}
+                                                    strokeDasharray={hook.is_active ? "0" : "5,5"}
+                                                />
+
+                                                <text
+                                                    x={startX - 15}
+                                                    y={startY + 20}
+                                                    className="text-xs"
+                                                    fill="#6B7280"
+                                                    textAnchor="end"
+                                                >
+                                                    {hook.name} ({hook.line_type || 'N/A'})
+                                                </text>
+                                            </g>
                                         );
                                     })}
                                 </g>
                             );
                         })}
                     </svg>
+                </div>
 
-                    {/* Legend */}
-                    <div className="mt-4 flex flex-wrap gap-4 text-sm">
-                        <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 bg-green-500 rounded"></div>
-                            <span>Low (&lt;50)</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 bg-blue-500 rounded"></div>
-                            <span>Normal (50-150)</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 bg-orange-500 rounded"></div>
-                            <span>Warning (150-250)</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 bg-red-500 rounded"></div>
-                            <span>Critical (&gt;250)</span>
-                        </div>
+                <div className="mt-4 flex flex-wrap gap-4 text-sm">
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-green-500 rounded"></div>
+                        <span>Low (&lt;50)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-blue-500 rounded"></div>
+                        <span>Normal (50-150)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-orange-500 rounded"></div>
+                        <span>Warning (150-250)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-red-500 rounded"></div>
+                        <span>Critical (&gt;250)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="font-semibold">
+                            Orientation: {shipData.statistics.orientation_angle}°
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-gray-600">Total Lines: {totalActiveHooks}</span>
                     </div>
                 </div>
-            );
+            </div>
+        );
+    };
+
+    const BirdsEyeGroupView = ({ shipData, selectedColors, onLineClick }) => {
+        const svgWidth = 900;
+        const svgHeight = 700;
+
+        const totalActiveHooks = shipData.bollards.reduce(
+            (sum, bollard) => sum + bollard.hooks.filter(h => h.is_active).length,
+            0
+        );
+
+        const bollardCount = shipData.bollards.length;
+        const shipWidth = 180;
+        const shipLength = Math.max(550, totalActiveHooks * 30);
+        const shipX = 450;
+        const shipY = (svgHeight - shipLength) / 2;
+
+        const orientationAngle = shipData.statistics.orientation_angle || 0;
+
+        const dockX = 50;
+        const dockY = Math.max(50, shipY - 50);
+        const dockWidth = 150;
+        const dockHeight = shipLength + 100;
+
+        const bollardSpacing = dockHeight / (bollardCount + 1);
+
+        const shipCenterX = shipX + shipWidth / 2;
+        const shipCenterY = shipY + shipLength / 2;
+
+        const boxColor = getBoxColor();
+
+        const hooksByType = {
+            HEAD: [],
+            SPRING_FWD: [],
+            BREAST: [],
+            SPRING_AFT: [],
+            STERN: [],
+            OTHER: []
         };
 
-        // Bird's Eye View - Group View (shows all bollards with color indicators)
-        const BirdsEyeGroupView = ({ shipData, selectedColors, onBollardClick }) => {
-            const svgWidth = 1000;
-            const svgHeight = 600;
+        const allLineConnections = [];
+        shipData.bollards.forEach((bollard, bollardIndex) => {
+            const activeHooks = bollard.hooks.filter(h => h.is_active);
+            activeHooks.forEach((hook, hookIndex) => {
+                const bollardY = dockY + (bollardIndex + 1) * bollardSpacing;
+                const lineStartY = bollardY + (hookIndex - activeHooks.length / 2) * 15;
 
-            // Ship dimensions and position
-            const shipWidth = 180;
-            const shipLength = 450;
-            const shipX = 400;
-            const shipY = 75;
+                const conn = {
+                    bollard,
+                    bollardIndex,
+                    hook,
+                    hookIndex,
+                    lineStartY,
+                    bollardY
+                };
 
-            // Dock/Berth area
-            const dockX = 50;
-            const dockY = 50;
-            const dockWidth = 150;
-            const dockHeight = 500;
+                allLineConnections.push(conn);
 
-            // Calculate bollard positions
-            const bollardSpacing = dockHeight / (shipData.bollards.length + 1);
+                const lineType = hook.line_type || 'OTHER';
+                if (hooksByType[lineType]) {
+                    hooksByType[lineType].push(conn);
+                } else {
+                    hooksByType.OTHER.push(conn);
+                }
+            });
+        });
 
-            const lineColor = getLineColorGrey();
+        const assignPositions = (hooks, startPercent, endPercent) => {
+            hooks.forEach((conn, idx) => {
+                const progress = hooks.length > 1 ? idx / (hooks.length - 1) : 0.5;
+                const rangeStart = shipY + shipLength * startPercent;
+                const rangeEnd = shipY + shipLength * endPercent;
+                conn.attachmentY = rangeStart + (rangeEnd - rangeStart) * progress;
 
-            return (
-                <div className="bg-white rounded-lg shadow-md p-6">
-                    <h2 className="text-xl font-semibold text-gray-900 mb-4">
-                        Group View - Birds Eye Perspective
-                    </h2>
-                    <p className="text-sm text-gray-600 mb-4">
-                        Click on any bollard area to select a color indicator
-                    </p>
+                if (conn.hook.line_type === 'BREAST') {
+                    conn.attachmentX = shipX;
+                } else {
+                    conn.attachmentX = shipX + shipWidth * 0.25;
+                }
+            });
+        };
 
+        assignPositions(hooksByType.HEAD, 0.05, 0.20);
+        assignPositions(hooksByType.SPRING_FWD, 0.25, 0.40);
+        assignPositions(hooksByType.BREAST, 0.42, 0.58);
+        assignPositions(hooksByType.SPRING_AFT, 0.60, 0.75);
+        assignPositions(hooksByType.STERN, 0.80, 0.95);
+        assignPositions(hooksByType.OTHER, 0.40, 0.60);
+
+        return (
+            <div className="bg-white rounded-lg shadow-md p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">
+                    Group View - Birds Eye Perspective
+                </h2>
+                <p className="text-sm text-gray-600 mb-4">
+                    Click on any mooring line to change its color
+                </p>
+
+                <div className="overflow-auto">
                     <svg width={svgWidth} height={svgHeight} className="border border-gray-200 rounded bg-blue-50">
-                        {/* Water background */}
                         <rect x={0} y={0} width={svgWidth} height={svgHeight} fill="#DBEAFE" />
 
-                        {/* Dock/Berth area */}
                         <rect
                             x={dockX}
                             y={dockY}
@@ -468,9 +577,7 @@
                             DOCK
                         </text>
 
-                        {/* Ship - boat shape from above */}
-                        <g>
-                            {/* Main hull */}
+                        <g transform={`rotate(${orientationAngle} ${shipCenterX} ${shipCenterY})`}>
                             <ellipse
                                 cx={shipX + shipWidth / 2}
                                 cy={shipY + shipLength / 2}
@@ -482,7 +589,6 @@
                                 opacity="0.85"
                             />
 
-                            {/* Bow (front) - pointed */}
                             <path
                                 d={`M ${shipX + shipWidth / 2} ${shipY}
                                     L ${shipX + shipWidth * 0.2} ${shipY + 40}
@@ -492,7 +598,6 @@
                                 opacity="0.9"
                             />
 
-                            {/* Ship label */}
                             <text
                                 x={shipX + shipWidth / 2}
                                 y={shipY + shipLength / 2}
@@ -523,37 +628,13 @@
                             </text>
                         </g>
 
-                        {/* Bollards with color indicators and grouped lines */}
                         {shipData.bollards.map((bollard, bollardIndex) => {
                             const bollardY = dockY + (bollardIndex + 1) * bollardSpacing;
                             const bollardX = dockX + dockWidth;
                             const activeHooks = bollard.hooks.filter(h => h.is_active);
 
-                            // Get color for this bollard
-                            const boxColor = selectedColors[bollard.name] === 'recommended' || !selectedColors[bollard.name]
-                                ? getBoxColor()
-                                : selectedColors[bollard.name] === 'green'
-                                ? '#10B981'
-                                : selectedColors[bollard.name] === 'yellow'
-                                ? '#F59E0B'
-                                : selectedColors[bollard.name] === 'red'
-                                ? '#EF4444'
-                                : '#1F2937';
-
                             return (
                                 <g key={bollard.name}>
-                                    {/* Clickable area for bollard */}
-                                    <rect
-                                        x={dockX - 5}
-                                        y={bollardY - 30}
-                                        width={dockWidth + 15}
-                                        height={60}
-                                        fill="transparent"
-                                        className="cursor-pointer hover:fill-gray-200 hover:fill-opacity-30"
-                                        onClick={() => onBollardClick(bollard)}
-                                    />
-
-                                    {/* Total tension label (left side) */}
                                     <text
                                         x={dockX - 15}
                                         y={bollardY + 5}
@@ -564,7 +645,6 @@
                                         {bollard.total_tension.toFixed(1)}
                                     </text>
 
-                                    {/* Color indicator boxes (next to tension) */}
                                     <g transform={`translate(${dockX - 50}, ${bollardY - (activeHooks.length * 7)})`}>
                                         {activeHooks.map((hook, idx) => (
                                             <rect
@@ -581,7 +661,6 @@
                                         ))}
                                     </g>
 
-                                    {/* Bollard circle */}
                                     <circle
                                         cx={bollardX}
                                         cy={bollardY}
@@ -591,7 +670,6 @@
                                         strokeWidth="2"
                                     />
 
-                                    {/* Bollard label */}
                                     <text
                                         x={dockX + 10}
                                         y={bollardY + 5}
@@ -601,21 +679,32 @@
                                         {bollard.name}
                                     </text>
 
-                                    {/* Grouped mooring lines */}
                                     {activeHooks.map((hook, hookIndex) => {
-                                        const lineStartY = bollardY + (hookIndex - activeHooks.length / 2) * 15;
+                                        const lineStartY =
+                                            bollardY +
+                                            (hookIndex - activeHooks.length / 2) * 15;
+                                        const lineKey = `${bollard.name}-${hook.name}`;
 
-                                        // Line endpoint on ship
-                                        let endX = shipX;
-                                        let endY = shipY + shipLength / 2;
-
-                                        if (hook.line_type === 'HEAD') {
-                                            endY = shipY + shipLength * 0.2;
-                                        } else if (hook.line_type === 'STERN') {
-                                            endY = shipY + shipLength * 0.8;
-                                        } else if (hook.line_type === 'BREAST') {
-                                            endY = lineStartY;
+                                        let lineColor = getLineColorGrey();
+                                        if (selectedColors[lineKey]) {
+                                            lineColor =
+                                                selectedColors[lineKey] === 'green'
+                                                    ? '#10B981'
+                                                    : selectedColors[lineKey] === 'yellow'
+                                                        ? '#F59E0B'
+                                                        : selectedColors[lineKey] === 'red'
+                                                            ? '#EF4444'
+                                                            : '#1F2937';
                                         }
+
+                                        const connection = allLineConnections.find(
+                                            c => c.bollard.name === bollard.name && c.hook.name === hook.name
+                                        );
+
+                                        if (!connection) return null;
+
+                                        const endX = connection.attachmentX;
+                                        const endY = connection.attachmentY;
 
                                         return (
                                             <line
@@ -625,8 +714,10 @@
                                                 x2={endX}
                                                 y2={endY}
                                                 stroke={lineColor}
-                                                strokeWidth="2.5"
-                                                opacity="0.7"
+                                                strokeWidth="3"
+                                                opacity="0.8"
+                                                className="cursor-pointer hover:opacity-100"
+                                                onClick={() => onLineClick(lineKey)}
                                             />
                                         );
                                     })}
@@ -634,283 +725,442 @@
                             );
                         })}
                     </svg>
+                </div>
 
-                    {/* Legend */}
-                    <div className="mt-4 flex flex-wrap gap-4 text-sm">
-                        <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 bg-gray-300 rounded"></div>
-                            <span>Grey lines = Mooring lines</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <div className="w-4 h-4 border border-gray-400 rounded" style={{ backgroundColor: getBoxColor() }}></div>
-                            <span>Color boxes = Status indicators (click bollard to change)</span>
-                        </div>
+                <div className="mt-4 flex flex-wrap gap-4 text-sm">
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 bg-gray-300 rounded"></div>
+                        <span>Grey = Default line color</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 border border-gray-400 rounded" style={{ backgroundColor: boxColor }}></div>
+                        <span>Recommended color indicator</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="font-semibold">
+                            Orientation: {shipData.statistics.orientation_angle}°
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-gray-600">Total Lines: {totalActiveHooks}</span>
                     </div>
                 </div>
-            );
-        };
+            </div>
+        );
+    };
 
-        // Main App Component
-        const MooringSystemApp = () => {
-            const [shipData, setShipData] = useState(null);
-            const [viewMode, setViewMode] = useState('group');
-            const [selectedHook, setSelectedHook] = useState(null);
-            const [selectedBollard, setSelectedBollard] = useState(null);
-            const [selectedColors, setSelectedColors] = useState({});
-            const [ws, setWs] = useState(null);
-            const [isConnected, setIsConnected] = useState(false);
-            const [error, setError] = useState(null);
+    /* ---------- Main Mooring App (per ship) ---------- */
 
-            // API Base URL - always use port 8000 for the backend
-            const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:8000`;
+    const MooringSystemApp = ({ shipId }) => {
+        const [shipData, setShipData] = useState(null);
+        const [selectedHook, setSelectedHook] = useState(null);
+        const [selectedColors, setSelectedColors] = useState({});
+        const [selectedLine, setSelectedLine] = useState(null);
+        const [ws, setWs] = useState(null);
+        const [isConnected, setIsConnected] = useState(false);
+        const [error, setError] = useState(null);
 
-            // Configure your ship ID here
-            const SHIP_ID = '2579'; // Change this to match your vessel ID (e.g., '2579')
+        useEffect(() => {
+            const connectWebSocket = () => {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.hostname}:8000/ws`;
 
-            useEffect(() => {
-                const connectWebSocket = () => {
-                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                    const wsUrl = `${protocol}//${window.location.hostname}:8000/ws`;
+                const websocket = new WebSocket(wsUrl);
 
-                    const websocket = new WebSocket(wsUrl);
-
-                    websocket.onopen = () => {
-                        console.log('WebSocket connected');
-                        setIsConnected(true);
-                        setError(null);
-                    };
-
-                    websocket.onmessage = (event) => {
-                        try {
-                            const data = JSON.parse(event.data);
-                            fetchShipData();
-                        } catch (err) {
-                            console.error('Error parsing WebSocket message:', err);
-                        }
-                    };
-
-                    websocket.onerror = (error) => {
-                        console.error('WebSocket error:', error);
-                        setError('WebSocket connection error');
-                    };
-
-                    websocket.onclose = () => {
-                        console.log('WebSocket disconnected');
-                        setIsConnected(false);
-                        setTimeout(connectWebSocket, 3000);
-                    };
-
-                    setWs(websocket);
+                websocket.onopen = () => {
+                    setIsConnected(true);
+                    setError(null);
                 };
 
-                connectWebSocket();
-
-                return () => {
-                    if (ws) {
-                        ws.close();
+                websocket.onmessage = (event) => {
+                    try {
+                        JSON.parse(event.data); // ensure valid
+                        fetchShipData(shipId);
+                    } catch (err) {
+                        console.error('Error parsing WebSocket message:', err);
                     }
                 };
-            }, []);
 
-            const fetchShipData = async () => {
-                try {
-                    console.log(`Fetching ship data from: ${API_BASE_URL}/ships/${SHIP_ID}`);
-                    const response = await fetch(`${API_BASE_URL}/ships/${SHIP_ID}`);
+                websocket.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    setError('WebSocket connection error');
+                };
 
-                    if (response.ok) {
-                        const data = await response.json();
-                        console.log('Ship data received:', data);
-                        setShipData(data);
-                    } else if (response.status === 404) {
-                        setError(`Ship ID "${SHIP_ID}" not found. Please check the SHIP_ID configuration.`);
-                        console.error(`Ship not found. Status: ${response.status}`);
-                    } else {
-                        setError(`Failed to fetch ship data. Status: ${response.status}`);
-                        console.error(`Error response: ${response.status} ${response.statusText}`);
-                    }
-                } catch (err) {
-                    console.error('Error fetching ship data:', err);
-                    setError(`Failed to connect to backend at ${API_BASE_URL}. Is the backend running?`);
+                websocket.onclose = () => {
+                    setIsConnected(false);
+                    setTimeout(connectWebSocket, 3000);
+                };
+
+                setWs(websocket);
+            };
+
+            connectWebSocket();
+
+            return () => {
+                if (ws) {
+                    ws.close();
                 }
             };
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, []);
 
-            useEffect(() => {
-                fetchShipData();
-            }, []);
+        const fetchShipData = async (id) => {
+            try {
+                const response = await fetch(`${API_BASE_URL}/ships/${id}`);
 
-            const handleHookClick = (hook) => {
-                setSelectedHook(hook);
-            };
+                if (response.ok) {
+                    const data = await response.json();
+                    setShipData(data);
+                } else if (response.status === 404) {
+                    setError(`Ship ID "${id}" not found.`);
+                } else {
+                    setError(`Failed to fetch ship data. Status: ${response.status}`);
+                }
+            } catch (err) {
+                console.error('Error fetching ship data:', err);
+                setError(`Failed to connect to backend at ${API_BASE_URL}. Is the backend running?`);
+            }
+        };
 
-            const handleBollardClick = (bollard) => {
-                setSelectedBollard(bollard);
-            };
+        useEffect(() => {
+            if (shipId) {
+                fetchShipData(shipId);
+            }
+        }, [shipId]);
 
-            const sendAlarm = async () => {
-                if (!selectedHook) return;
+        const handleHookClick = (hook, bollardName) => {
+            setSelectedHook({ hook, bollardName });
+        };
 
-                try {
-                    await fetch(`${API_BASE_URL}/alarm/webhook`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            hook: selectedHook.name,
-                            tension: selectedHook.tension,
-                            timestamp: new Date().toISOString()
-                        })
-                    });
-                    alert('Alarm sent successfully!');
-                    setSelectedHook(null);
-                } catch (err) {
-                    console.error('Error sending alarm:', err);
+        const handleLineClick = (lineKey) => {
+            setSelectedLine(lineKey);
+        };
+
+        // ALERT: true, no colour
+        const sendAlarm = async () => {
+            if (!selectedHook || !shipData) return;
+
+            const { hook, bollardName } = selectedHook;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/webhook`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        berth_name: shipData.berth,
+                        bollard_name: bollardName,
+                        hook_id: hook.name,
+                        tension: Math.round(hook.tension || 0),
+                        alert: true
+                    })
+                });
+
+                if (!response.ok) {
                     alert('Failed to send alarm');
+                } else {
+                    alert('Alarm sent successfully!');
+                }
+            } catch (err) {
+                console.error('Error sending alarm:', err);
+                alert('Failed to send alarm');
+            } finally {
+                setSelectedHook(null);
+            }
+        };
+
+        // Colour change: set colour, alert = false
+        const handleColorSelect = async (color) => {
+            if (!selectedLine || !shipData) return;
+
+            const [bollardName, ...hookNameParts] = selectedLine.split('-');
+            const hookName = hookNameParts.join('-');
+
+            const bollard = shipData.bollards.find(b => b.name === bollardName);
+            const hook = bollard?.hooks.find(h => h.name === hookName);
+
+            if (!bollard || !hook) {
+                alert('Failed to find hook information');
+                setSelectedLine(null);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/webhook`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        berth_name: shipData.berth,
+                        bollard_name: bollardName,
+                        hook_id: hookName,
+                        tension: Math.round(hook.tension || 0),
+                        colour: color.charAt(0).toUpperCase() + color.slice(1),
+                        alert: false
+                    })
+                });
+
+                if (response.ok) {
+                    setSelectedColors(prev => ({
+                        ...prev,
+                        [selectedLine]: color
+                    }));
+                } else {
+                    alert('Failed to update color');
+                }
+            } catch (err) {
+                console.error('Error updating color:', err);
+                alert('Failed to update color');
+            }
+
+            setSelectedLine(null);
+        };
+
+        if (error) {
+            return (
+                <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                    <div className="bg-white p-8 rounded-lg shadow-md">
+                        <AlertCircle className="text-red-500 w-12 h-12 mx-auto mb-4" />
+                        <h2 className="text-xl font-semibold text-gray-900 mb-2">Connection Error</h2>
+                        <p className="text-gray-600">{error}</p>
+                    </div>
+                </div>
+            );
+        }
+
+        if (!shipData) {
+            return (
+                <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                        <p className="text-gray-600">Loading mooring data...</p>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div className="min-h-screen bg-gray-100">
+                <header className="bg-white shadow-sm border-b border-gray-200">
+                    <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h1 className="text-2xl font-bold text-gray-900">BHP Mooring System</h1>
+                                <p className="text-sm text-gray-600 mt-1">
+                                    {shipData.ship.name} ({shipData.ship.vessel_id}) - {shipData.berth}
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <button
+                                    className="text-sm text-blue-600 hover:underline"
+                                    onClick={() => { window.location.href = '/ships'; }}
+                                >
+                                    &larr; Back to ships
+                                </button>
+                                <div className="flex items-center gap-2">
+                                    <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+                                    <span className="text-sm text-gray-600">
+                                        {isConnected ? 'Connected' : 'Disconnected'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+
+                <div className="max-w-full mx-auto px-4 py-4 sm:px-6 lg:px-8">
+                    <div className="bg-white rounded-lg shadow-sm p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4">Statistics</h2>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                                <p className="text-sm text-gray-600">Total Tension</p>
+                                <p className="text-2xl font-bold text-gray-900">
+                                    {shipData.statistics.total_tension.toFixed(1)}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600">Active Bollards</p>
+                                <p className="text-2xl font-bold text-gray-900">
+                                    {shipData.statistics.active_bollards}/{shipData.statistics.total_bollards}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600">Active Hooks</p>
+                                <p className="text-2xl font-bold text-gray-900">
+                                    {shipData.statistics.active_hooks}
+                                </p>
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600">Orientation</p>
+                                <p className="text-2xl font-bold text-gray-900">
+                                    {shipData.statistics.orientation_angle}°
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="max-w-full mx-auto px-4 py-4 sm:px-6 lg:px-8 pb-8">
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                        <BirdsEyeIndividualView
+                            shipData={shipData}
+                            onHookClick={handleHookClick}
+                        />
+
+                        <BirdsEyeGroupView
+                            shipData={shipData}
+                            selectedColors={selectedColors}
+                            onLineClick={handleLineClick}
+                        />
+                    </div>
+                </div>
+
+                {selectedHook && (
+                    <AlarmModal
+                        hookName={selectedHook.hook.name}
+                        onClose={() => setSelectedHook(null)}
+                        onSendAlarm={sendAlarm}
+                    />
+                )}
+
+                {selectedLine && (
+                    <ColorSelectionModal
+                        lineName={selectedLine}
+                        onClose={() => setSelectedLine(null)}
+                        onSelectColor={handleColorSelect}
+                    />
+                )}
+            </div>
+        );
+    };
+
+    /* ---------- Ships selection page (/ships) ---------- */
+
+    const ShipsPage = () => {
+        const [ships, setShips] = useState([]);
+        const [loading, setLoading] = useState(true);
+        const [error, setError] = useState(null);
+
+        useEffect(() => {
+            const fetchShips = async () => {
+                try {
+                    const res = await fetch(`${API_BASE_URL}/ships`);
+                    if (!res.ok) {
+                        setError(`Failed to fetch ships. Status: ${res.status}`);
+                        setLoading(false);
+                        return;
+                    }
+                    const json = await res.json();
+                    const terminal = json.data;
+
+                    if (!terminal || !terminal.berths) {
+                        setShips([]);
+                        setLoading(false);
+                        return;
+                    }
+
+                    const list = terminal.berths
+                        .filter(b => b.ship)
+                        .map(b => ({
+                            berth: b.name,
+                            name: b.ship.name,
+                            vesselId: b.ship.vesselId
+                        }));
+
+                    setShips(list);
+                } catch (e) {
+                    console.error(e);
+                    setError('Failed to load ships from backend.');
+                } finally {
+                    setLoading(false);
                 }
             };
 
-            const handleColorSelect = (color) => {
-                if (!selectedBollard) return;
+            fetchShips();
+        }, []);
 
-                setSelectedColors(prev => ({
-                    ...prev,
-                    [selectedBollard.name]: color
-                }));
-                setSelectedBollard(null);
-            };
-
-            if (error) {
-                return (
-                    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-                        <div className="bg-white p-8 rounded-lg shadow-md">
-                            <AlertCircle className="text-red-500 w-12 h-12 mx-auto mb-4" />
-                            <h2 className="text-xl font-semibold text-gray-900 mb-2">Connection Error</h2>
-                            <p className="text-gray-600">{error}</p>
-                        </div>
-                    </div>
-                );
-            }
-
-            if (!shipData) {
-                return (
-                    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-                        <div className="text-center">
-                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                            <p className="text-gray-600">Loading mooring data...</p>
-                        </div>
-                    </div>
-                );
-            }
-
+        if (loading) {
             return (
-                <div className="min-h-screen bg-gray-100">
-                    <header className="bg-white shadow-sm border-b border-gray-200">
-                        <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <h1 className="text-2xl font-bold text-gray-900">BHP Mooring System</h1>
-                                    <p className="text-sm text-gray-600 mt-1">
-                                        {shipData.ship.name} ({shipData.ship.vessel_id}) - {shipData.berth}
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    <div className="flex items-center gap-2">
-                                        <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
-                                        <span className="text-sm text-gray-600">
-                                            {isConnected ? 'Connected' : 'Disconnected'}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </header>
-
-                    <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-                        <div className="bg-white rounded-lg shadow-sm p-2 inline-flex gap-2">
-                            <button
-                                onClick={() => setViewMode('individual')}
-                                className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                                    viewMode === 'individual'
-                                        ? 'bg-blue-600 text-white'
-                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                }`}
-                            >
-                                Individual View
-                            </button>
-                            <button
-                                onClick={() => setViewMode('group')}
-                                className={`px-4 py-2 rounded-md font-medium transition-colors ${
-                                    viewMode === 'group'
-                                        ? 'bg-blue-600 text-white'
-                                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                                }`}
-                            >
-                                Group View
-                            </button>
-                        </div>
+                <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                        <p className="text-gray-600">Loading ships...</p>
                     </div>
-
-                    <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
-                        <div className="bg-white rounded-lg shadow-sm p-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Statistics</h2>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <div>
-                                    <p className="text-sm text-gray-600">Total Tension</p>
-                                    <p className="text-2xl font-bold text-gray-900">{shipData.statistics.total_tension.toFixed(1)}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-600">Active Bollards</p>
-                                    <p className="text-2xl font-bold text-gray-900">
-                                        {shipData.statistics.active_bollards}/{shipData.statistics.total_bollards}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-600">Active Hooks</p>
-                                    <p className="text-2xl font-bold text-gray-900">{shipData.statistics.active_hooks}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-gray-600">Orientation</p>
-                                    <p className="text-2xl font-bold text-gray-900">{shipData.statistics.orientation_angle}°</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8 pb-8">
-                        {viewMode === 'individual' ? (
-                            <BirdsEyeIndividualView
-                                shipData={shipData}
-                                onHookClick={handleHookClick}
-                            />
-                        ) : (
-                            <BirdsEyeGroupView
-                                shipData={shipData}
-                                selectedColors={selectedColors}
-                                onBollardClick={handleBollardClick}
-                            />
-                        )}
-                    </div>
-
-                    {selectedHook && (
-                        <AlarmModal
-                            hookName={selectedHook.name}
-                            onClose={() => setSelectedHook(null)}
-                            onSendAlarm={sendAlarm}
-                        />
-                    )}
-
-                    {selectedBollard && (
-                        <ColorSelectionModal
-                            bollardName={selectedBollard.name}
-                            onClose={() => setSelectedBollard(null)}
-                            onSelectColor={handleColorSelect}
-                        />
-                    )}
                 </div>
             );
-        };
+        }
 
-        // Render the app
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<MooringSystemApp />);
-    </script>
+        if (error) {
+            return (
+                <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+                    <div className="bg-white p-8 rounded-lg shadow-md max-w-md">
+                        <AlertCircle className="text-red-500 w-12 h-12 mx-auto mb-4" />
+                        <h2 className="text-xl font-semibold text-gray-900 mb-2">Error</h2>
+                        <p className="text-gray-600">{error}</p>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div className="min-h-screen bg-gray-100">
+                <header className="bg-white shadow-sm border-b border-gray-200">
+                    <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
+                        <h1 className="text-2xl font-bold text-gray-900">BHP Mooring System</h1>
+                        <p className="text-sm text-gray-600 mt-1">
+                            Select a ship to view mooring details
+                        </p>
+                    </div>
+                </header>
+
+                <main className="max-w-5xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+                    {ships.length === 0 ? (
+                        <p className="text-gray-600">
+                            No ships currently available in the latest snapshot.
+                        </p>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {ships.map(ship => (
+                                <button
+                                    key={`${ship.berth}-${ship.vesselId}`}
+                                    className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 text-left hover:shadow-md transition-shadow"
+                                    onClick={() => {
+                                        // Navigate to /ships/{ship_id}
+                                        window.location.href = `/ships/${ship.vesselId}`;
+                                    }}
+                                >
+                                    <p className="text-sm text-gray-500 mb-1">
+                                        Berth: <span className="font-medium text-gray-700">{ship.berth}</span>
+                                    </p>
+                                    <p className="text-lg font-semibold text-gray-900">
+                                        {ship.name}
+                                    </p>
+                                    <p className="text-sm text-gray-600 mt-1">
+                                        Vessel ID: <span className="font-mono">{ship.vesselId}</span>
+                                    </p>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </main>
+            </div>
+        );
+    };
+
+    /* ---------- Simple router ---------- */
+
+    const AppRouter = () => {
+        const [shipId] = useState(getShipIdFromPath());
+
+        if (!shipId) {
+            // /ships or anything else without an ID → ships list
+            return <ShipsPage />;
+        }
+
+        // /ships/{ship_id} → main mooring app for that ship
+        return <MooringSystemApp shipId={shipId} />;
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<AppRouter />);
+</script>
 </body>
 </html>

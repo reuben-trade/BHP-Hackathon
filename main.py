@@ -10,7 +10,7 @@ from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
 
-from models import MooringTerminal, Berth, Bollard, Hook, WebhookRequest
+from models import MooringTerminal, WebhookRequest
 from utils import calculate_orientation_from_two_radars, compute_hook_colours_for_berth
 from websocket_client import ConnectionManager
 
@@ -65,7 +65,7 @@ async def receive(data: MooringTerminal):
     current_data = data
     mooring_db.append(data)
 
-    await manager.broadcast(data.model_dump_json())
+    await manager.broadcast(data.model_dump(mode='json'))
 
     return {"status": "received", "timestamp": data.timestamp}
 
@@ -113,7 +113,7 @@ async def get_ship_data(ship_id: str):
                             "faulted": hook.faulted,
                             "line_type": hook.attachedLine,
                             "is_active": hook.is_active,
-                            "colour": colour,      # ← ADDED
+                            "colour": colour,      # â† ADDED
                         })
 
                 if hooks_data:  # Only include bollards with active hooks
@@ -222,14 +222,14 @@ async def get_berth_tensions(berth_name: str):
     if berth is None:
         raise HTTPException(status_code=404, detail=f"Berth {berth_name} not found")
 
-    hook_colours = compute_hook_colours_for_berth(berth)
+    # hook_colours = compute_hook_colours_for_berth(berth)
 
     # Build comprehensive tension data
     bollard_data = []
     for bollard in berth.bollards:
         hooks_data = []
         for hook in bollard.hooks:
-            colour = hook_colours.get((berth.name, hook.name))
+            # colour = hook_colours.get((berth.name, hook.name))
             hooks_data.append({
                 "name": hook.name,
                 "tension": hook.tension,
@@ -237,7 +237,7 @@ async def get_berth_tensions(berth_name: str):
                 "faulted": hook.faulted,
                 "line_type": hook.attachedLine,
                 "is_active": hook.is_active,
-                "colour": colour  # <--- NEW FIELD
+                # "colour": colour
             })
 
         bollard_data.append({
@@ -246,7 +246,8 @@ async def get_berth_tensions(berth_name: str):
             "active_hooks": bollard.active_hook_count,
             "total_hooks": bollard.hook_count,
             "tensions_by_line": bollard.get_tensions_by_line(),
-            "hooks": hooks_data
+            "hooks": hooks_data,
+            "colour": bollard.colour
         })
 
     return {
@@ -277,6 +278,7 @@ async def get_bollard_details(berth_name: str, bollard_name: str):
     bollard = berth.get_bollard_by_name(bollard_name)
     if bollard is None:
         raise HTTPException(status_code=404, detail=f"Bollard {bollard_name} not found")
+    hook_colours = compute_hook_colours_for_berth(berth)
 
     return {
         "bollard": bollard.name,
@@ -288,7 +290,8 @@ async def get_bollard_details(berth_name: str, bollard_name: str):
                 "tension": hook.tension,
                 "status": hook.tension_status,
                 "line_type": hook.attachedLine,
-                "faulted": hook.faulted
+                "faulted": hook.faulted,
+                "colour": hook_colours.get((berth.name, hook.name))
             }
             for hook in bollard.hooks
         ]

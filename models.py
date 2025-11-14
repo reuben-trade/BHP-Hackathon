@@ -3,6 +3,7 @@ from typing import Optional, List, Dict
 from enum import Enum
 from datetime import datetime
 
+#TODO: hook.colour for the ipad view
 
 # Enums
 class DistanceStatus(str, Enum):
