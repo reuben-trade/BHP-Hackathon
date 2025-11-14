@@ -356,7 +356,7 @@
     clearSvg(svgInd);
     if (!data || !data.statistics) return;
 
-    const angle = data.statistics.orientation_angle || 0;
+    const angle = (data.statistics.orientation_angle || 0) * Math.PI / 180;  // Convert degrees to radians
     const geom  = computeShipGeom(angle, data.radars);
 
     // berth
@@ -423,7 +423,7 @@
     clearSvg(svgGrp);
     if (!data || !data.statistics) return;
 
-    const angle = data.statistics.orientation_angle || 0;
+    const angle = (data.statistics.orientation_angle || 0) * Math.PI / 180;  // Convert degrees to radians
     const geom  = computeShipGeom(angle, data.radars);
 
     // berth
@@ -562,7 +562,7 @@
       meta.textContent = '';
       return;
     }
-    const ang = (data.statistics.orientation_angle_deg || 0).toFixed(2);
+    const ang = (data.statistics.orientation_angle || 0).toFixed(2);
     meta.textContent =
       `${data.ship.name} @ ${data.berth} | angle ${ang}° | total tension ${data.statistics.total_tension}`;
   }
