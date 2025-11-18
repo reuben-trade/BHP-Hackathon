@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mooring Worker Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .header .subtitle {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .back-button {
+            background: #444;
+            border: none;
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .back-button:hover {
+            background: #555;
+        }
+
+        .list-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .list-item {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+
+        .list-item:hover {
+            background: #333;
+            border-color: #4a90e2;
+        }
+
+        .list-item-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .list-item-info {
+            color: #888;
+            font-size: 14px;
+        }
+
+        /* Bollard visualization */
+        .bollard-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+            gap: 30px;
+        }
+
+        .bollard-circle {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: bold;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .hooks-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            max-width: 100%;
+        }
+
+        .hook-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .hook-tension {
+            font-size: 11px;
+            margin-top: 4px;
+            opacity: 0.9;
+        }
+
+        /* Color classes */
+        .color-red { background-color: #e74c3c; }
+        .color-green { background-color: #2ecc71; }
+        .color-yellow { background-color: #f39c12; }
+        .color-black { background-color: #000; }
+        .color-grey { background-color: #7f8c8d; }
+        .color-gray { background-color: #7f8c8d; }
+
+        /* Alert styles */
+        .alert-banner {
+            display: none;
+            background: #e74c3c;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            animation: pulse 1s infinite;
+            border: 3px solid #c0392b;
+        }
+
+        .alert-banner.active {
+            display: block;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+        }
+
+        .error {
+            background: #e74c3c;
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        .info-panel {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #444;
+        }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            color: #888;
+        }
+
+        .info-value {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- Template 1: Berth List -->
+    <div id="berth-list-view" class="view">
+        <div class="header">
+            <h1>Mooring System</h1>
+            <div class="subtitle">Select a Berth</div>
+        </div>
+        <div id="berth-list" class="list-container">
+            <div class="loading">Loading berths...</div>
+        </div>
+    </div>
+
+    <!-- Template 2: Bollard List -->
+    <div id="bollard-list-view" class="view" style="display: none;">
+        <button class="back-button" onclick="showBerthList()">
+            ← Back to Berths
+        </button>
+        <div class="header">
+            <h1 id="bollard-list-berth-name">Berth</h1>
+            <div class="subtitle">Select a Bollard</div>
+        </div>
+        <div id="bollard-list" class="list-container">
+            <div class="loading">Loading bollards...</div>
+        </div>
+    </div>
+
+    <!-- Template 3: Bollard Detail -->
+    <div id="bollard-detail-view" class="view" style="display: none;">
+        <button class="back-button" onclick="showBollardList()">
+            ← Back to Bollards
+        </button>
+
+        <div id="alert-banner" class="alert-banner">
+            ⚠️ DANGER - AVOID THIS BOLLARD ⚠️
+        </div>
+
+        <div class="header">
+            <h1 id="bollard-detail-name">Bollard</h1>
+            <div class="subtitle" id="bollard-detail-berth">Berth</div>
+        </div>
+
+        <div id="bollard-info" class="info-panel"></div>
+
+        <div class="bollard-container">
+            <div id="bollard-main-circle" class="bollard-circle">
+                Bollard
+            </div>
+            <div id="hooks-container" class="hooks-container"></div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_BASE = window.location.origin;
+
+        // State
+        let currentBerthName = '';
+        let currentBollardName = '';
+        let alertAudio = null;
+        let alertSoundInterval = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadBerthList();
+            initAlertAudio();
+        });
+
+        // Initialize alert audio
+        function initAlertAudio() {
+            // Create an audio context for alert sound
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (AudioContext) {
+                const audioContext = new AudioContext();
+                alertAudio = {
+                    context: audioContext,
+                    play: function() {
+                        const oscillator = audioContext.createOscillator();
+                        const gainNode = audioContext.createGain();
+
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioContext.destination);
+
+                        oscillator.frequency.value = 800;
+                        oscillator.type = 'sine';
+
+                        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+                        oscillator.start(audioContext.currentTime);
+                        oscillator.stop(audioContext.currentTime + 0.5);
+                    }
+                };
+            }
+        }
+
+        // Template 1: Load Berth List
+        async function loadBerthList() {
+            try {
+                const response = await fetch(`${API_BASE}/ships`);
+                const result = await response.json();
+                const data = result.data;
+
+                const container = document.getElementById('berth-list');
+                container.innerHTML = '';
+
+                if (!data || !data.berths || data.berths.length === 0) {
+                    container.innerHTML = '<div class="error">No berths available</div>';
+                    return;
+                }
+
+                data.berths.forEach(berth => {
+                    const item = document.createElement('div');
+                    item.className = 'list-item';
+                    item.onclick = () => loadBollardList(berth.name);
+
+                    const shipInfo = berth.ship ?
+                        `Ship: ${berth.ship.name} (${berth.ship.vesselId})` :
+                        'No ship moored';
+
+                    item.innerHTML = `
+                        <div class="list-item-title">${berth.name}</div>
+                        <div class="list-item-info">${shipInfo}</div>
+                        <div class="list-item-info">${berth.bollardCount} bollards • ${berth.hookCount} hooks</div>
+                    `;
+
+                    container.appendChild(item);
+                });
+            } catch (error) {
+                console.error('Error loading berths:', error);
+                document.getElementById('berth-list').innerHTML =
+                    '<div class="error">Failed to load berths</div>';
+            }
+        }
+
+        // Template 2: Load Bollard List
+        async function loadBollardList(berthName) {
+            currentBerthName = berthName;
+
+            try {
+                const response = await fetch(`${API_BASE}/berth/${berthName}/tensions`);
+                const data = await response.json();
+
+                document.getElementById('bollard-list-berth-name').textContent = berthName;
+
+                const container = document.getElementById('bollard-list');
+                container.innerHTML = '';
+
+                if (!data.bollards || data.bollards.length === 0) {
+                    container.innerHTML = '<div class="error">No bollards available</div>';
+                    return;
+                }
+
+                data.bollards.forEach(bollard => {
+                    const item = document.createElement('div');
+                    item.className = 'list-item';
+                    item.onclick = () => loadBollardDetail(berthName, bollard.name);
+
+                    const activeHooks = bollard.hooks.filter(h => h.is_active).length;
+
+                    item.innerHTML = `
+                        <div class="list-item-title">${bollard.name}</div>
+                        <div class="list-item-info">Total Tension: ${bollard.total_tension.toFixed(1)} kN</div>
+                        <div class="list-item-info">Active Hooks: ${activeHooks} / ${bollard.total_hooks}</div>
+                    `;
+
+                    container.appendChild(item);
+                });
+
+                showView('bollard-list-view');
+            } catch (error) {
+                console.error('Error loading bollards:', error);
+                alert('Failed to load bollards for ' + berthName);
+            }
+        }
+
+        // Template 3: Load Bollard Detail
+        async function loadBollardDetail(berthName, bollardName) {
+            currentBollardName = bollardName;
+
+            try {
+                // Fetch bollard details (now includes colour, alert, and hook colours)
+                const response = await fetch(`${API_BASE}/berth/${berthName}/bollards/${bollardName}`);
+                const bollardData = await response.json();
+
+                document.getElementById('bollard-detail-name').textContent = bollardName;
+                document.getElementById('bollard-detail-berth').textContent = berthName;
+
+                // Show alert if bollard has alert flag
+                const alertBanner = document.getElementById('alert-banner');
+
+                // Clear any existing alert interval
+                if (alertSoundInterval) {
+                    clearInterval(alertSoundInterval);
+                    alertSoundInterval = null;
+                }
+
+                if (bollardData.alert) {
+                    alertBanner.classList.add('active');
+                    // Play alert sound repeatedly
+                    if (alertAudio) {
+                        alertAudio.play();
+                        alertSoundInterval = setInterval(() => {
+                            alertAudio.play();
+                        }, 2000);
+                    }
+                } else {
+                    alertBanner.classList.remove('active');
+                }
+
+                // Info panel
+                const infoPanel = document.getElementById('bollard-info');
+                infoPanel.innerHTML = `
+                    <div class="info-row">
+                        <span class="info-label">Total Tension:</span>
+                        <span class="info-value">${bollardData.total_tension.toFixed(1)} kN</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Active Hooks:</span>
+                        <span class="info-value">${bollardData.hooks.filter(h => h.tension !== null).length} / ${bollardData.hooks.length}</span>
+                    </div>
+                `;
+
+                // Main bollard circle
+                const mainCircle = document.getElementById('bollard-main-circle');
+                mainCircle.className = `bollard-circle color-${(bollardData.colour || 'grey').toLowerCase()}`;
+                mainCircle.textContent = bollardName;
+
+                // Hooks
+                const hooksContainer = document.getElementById('hooks-container');
+                hooksContainer.innerHTML = '';
+
+                bollardData.hooks.forEach(hook => {
+                    const hookDiv = document.createElement('div');
+
+                    const hookColor = hook.colour || 'grey';
+                    hookDiv.className = `hook-circle color-${hookColor.toLowerCase()}`;
+
+                    const tensionText = hook.tension !== null ?
+                        `${hook.tension.toFixed(1)} kN` :
+                        'Inactive';
+
+                    hookDiv.innerHTML = `
+                        <div>${hook.name}</div>
+                        <div class="hook-tension">${tensionText}</div>
+                    `;
+
+                    hooksContainer.appendChild(hookDiv);
+                });
+
+                showView('bollard-detail-view');
+            } catch (error) {
+                console.error('Error loading bollard detail:', error);
+                alert('Failed to load bollard details');
+            }
+        }
+
+        // Helper function to get bollard color (no longer needed but kept for compatibility)
+        function getBollardColor(berthName, bollardName, tensionsData) {
+            const bollard = tensionsData.bollards.find(b => b.name === bollardName);
+            return bollard?.colour || 'grey';
+        }
+
+        // Helper function to get hook color (no longer needed but kept for compatibility)
+        function getHookColor(berthName, hookName, bollard) {
+            if (!bollard || !bollard.hooks) return 'grey';
+            const hook = bollard.hooks.find(h => h.name === hookName);
+            return hook?.colour || 'grey';
+        }
+
+        // Navigation
+        function showView(viewId) {
+            // Clear alert interval when leaving detail view
+            if (alertSoundInterval) {
+                clearInterval(alertSoundInterval);
+                alertSoundInterval = null;
+            }
+
+            document.querySelectorAll('.view').forEach(view => {
+                view.style.display = 'none';
+            });
+            document.getElementById(viewId).style.display = 'block';
+        }
+
+        function showBerthList() {
+            loadBerthList();
+            showView('berth-list-view');
+        }
+
+        function showBollardList() {
+            loadBollardList(currentBerthName);
+        }
+
+        // Auto-refresh every 5 seconds when on detail view
+        setInterval(() => {
+            const detailView = document.getElementById('bollard-detail-view');
+            if (detailView.style.display !== 'none') {
+                loadBollardDetail(currentBerthName, currentBollardName);
+            }
+        }, 5000);
+    </script>
+</body>
+</html>

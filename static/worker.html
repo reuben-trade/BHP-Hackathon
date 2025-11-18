@@ -34,6 +34,14 @@
       display: block;
     }
 
+    #groupHeaders {
+      display: flex;
+      justify-content: space-between;
+      padding: 0 40px 4px 40px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
     .legend {
       display: flex;
       gap: 12px;
@@ -85,6 +93,36 @@
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
+
+    /* floating colour picker */
+    #colorPicker {
+      position: fixed;
+      display: none;
+      background: #333;
+      border: 1px solid #555;
+      padding: 6px 8px;
+      border-radius: 4px;
+      z-index: 1000;
+      font-size: 12px;
+      color: #eee;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.6);
+    }
+    #colorPicker select,
+    #colorPicker button {
+      font-size: 12px;
+      margin-left: 4px;
+    }
+    #colorPicker button {
+      background: #444;
+      color: #eee;
+      border: 1px solid #666;
+      border-radius: 3px;
+      padding: 2px 6px;
+      cursor: pointer;
+    }
+    #colorPicker button:hover {
+      background: #555;
+    }
   </style>
 </head>
 <body>
@@ -92,6 +130,10 @@
   <h2>Mooring Status <span class="worker-badge">Worker View</span></h2>
 
   <div class="view-panel">
+    <div id="groupHeaders">
+      <div>Recommended<br>Colour</div>
+      <div>Selected<br>Colour</div>
+    </div>
     <svg id="svgMain" width="420" height="520"></svg>
   </div>
 
@@ -111,6 +153,22 @@
   </div>
 </div>
 
+<!-- Floating bollard colour picker -->
+<div id="colorPicker">
+  <label>
+    Mode:
+    <select id="colorSelect">
+      <option value="">Auto</option>
+      <option value="red">Red (tighten, +5)</option>
+      <option value="green">Green (slacken, -5)</option>
+      <option value="yellow">Yellow (0)</option>
+      <option value="alert">Alert</option>
+    </select>
+  </label>
+  <button id="colorApply">Apply</button>
+  <button id="colorCancel">X</button>
+</div>
+
 <script>
   // === config ===
   const urlParams = new URLSearchParams(window.location.search);
@@ -128,7 +186,23 @@
   const SHIP_W  = 120;
   const MIN_GAP = 15;
 
+  const SAFETY_LIMIT = 90;
   const ANGLE_THRESH = Math.PI / 180;
+  const OVERRIDE_TTL_MS = 5000;
+
+  // per-bollard overrides
+  const bollardOverrides = {};      // name -> 'red'|'green'|'yellow'|'alert'
+  const bollardExpiry    = {};      // name -> timestamp
+
+  // meta
+  let lastData = null;
+
+  // floating picker state
+  const picker     = document.getElementById('colorPicker');
+  const pickerSel  = document.getElementById('colorSelect');
+  const pickerApply= document.getElementById('colorApply');
+  const pickerCancel=document.getElementById('colorCancel');
+  let pickerCtx = null;      // { bollardName }
 
   function clearSvg(svg) {
     while (svg.firstChild) svg.removeChild(svg.firstChild);
@@ -143,6 +217,22 @@
   function rotate(x, y, a) {
     const c = Math.cos(a), s = Math.sin(a);
     return { x: x*c - y*s, y: x*s + y*c };
+  }
+
+  function purgeOverrides() {
+    const now = Date.now();
+    for (const [k, t] of Object.entries(bollardExpiry)) {
+      if (t <= now) {
+        delete bollardExpiry[k];
+        delete bollardOverrides[k];
+      }
+    }
+  }
+
+  function overrideDelta(mode) {
+    if (mode === 'red') return +5;
+    if (mode === 'green') return -5;
+    return 0;   // yellow or alert
   }
 
   function hullAnchor(geom, lineType, bollardIndex, totalBollards, tAlong) {
@@ -231,7 +321,19 @@
     };
   }
 
-  function drawWorkerView(data) {
+  function suggestedHookColour(hook) {
+    if (hook.colour) return hook.colour;
+    return 'yellow';
+  }
+
+  function aggColours(colours) {
+    if (colours.includes('black')) return 'black';
+    if (colours.includes('red'))   return 'red';
+    if (colours.includes('green')) return 'green';
+    return 'yellow';
+  }
+
+  function drawGroupView(data) {
     clearSvg(svgMain);
     if (!data || !data.statistics) return;
 
@@ -257,12 +359,10 @@
     const n = bollards.length || 1;
     const yMin = 80, yMax = HEIGHT-80;
 
-    // Check for alert status
-    const hasAlert = bollards.some(b =>
-      b.hooks && b.hooks.some(h => h.colour === 'black' || h.alert)
-    );
     const alarmBanner = document.getElementById('alarmBanner');
-    alarmBanner.style.display = hasAlert ? 'block' : 'none';
+    const hasLocalAlert = Object.values(bollardOverrides).includes('alert');
+    const hasServerAlert = bollards.some(b => b.alert === true);
+    alarmBanner.style.display = (hasLocalAlert || hasServerAlert) ? 'block' : 'none';
 
     bollards.forEach((b, idx) => {
       const t = n===1 ? 0.5 : idx/(n-1);
@@ -280,31 +380,89 @@
       const hullX  = anchor.x;
       const hullY  = anchor.y;
 
-      // Get the colour from the first hook (captain's selection)
-      // Default to yellow if no colour is set
-      let lineColor = 'yellow';
-      if (hooks.length > 0 && hooks[0].colour) {
-        lineColor = hooks[0].colour;
+      // recommended colour per bollard from hook colours
+      const hookCols = hooks.map(h => suggestedHookColour(h));
+      const recommended = aggColours(hookCols);
+
+      // draw recommended square on left column
+      const squareX = 40;
+      svgMain.appendChild(el('rect', {
+        x: squareX-14, y: bollY-14,
+        width: 28, height: 28,
+        fill: recommended,
+        stroke:'#444','stroke-width':1.5
+      }));
+
+      // selected colour: angle-only + override
+      const isBack = idx < n/2;
+      let baseDesired = 0;
+      if (angle > ANGLE_THRESH) {
+        baseDesired += isBack ? -5 : 5;
+      } else if (angle < -ANGLE_THRESH) {
+        baseDesired += isBack ? 5 : -5;
       }
 
-      // Draw the line from ship to bollard
+      // Read override from server (bollard.colour) or local override
+      // Server colour takes precedence over local override unless locally set
+      const serverColour = b.colour && b.colour !== 'Grey' ? b.colour.toLowerCase() : '';
+      const localOverride = bollardOverrides[b.name] || '';
+      const ov = localOverride || serverColour;
+      const dOv = overrideDelta(ov);
+      let desired = baseDesired + dOv;
+
+      // safety clamp using *average* tension
+      const tensions = hooks.map(h => (h.tension ?? 0));
+      const meanT = tensions.length
+        ? tensions.reduce((a,x)=>a+x,0)/tensions.length
+        : 0;
+      if (desired > SAFETY_LIMIT - meanT) {
+        desired = SAFETY_LIMIT - meanT;
+      }
+
+      // --- choose line colour ---
+      let lineColor;
+      if (ov === 'alert') {
+        lineColor = 'black';
+      } else if (ov === 'red' || ov === 'green' || ov === 'yellow') {
+        lineColor = ov;
+      } else {
+        // automatic suggestion based on desired change
+        if (desired > 5) {
+          lineColor = 'red';
+        } else if (desired < -5) {
+          lineColor = 'green';
+        } else {
+          lineColor = 'yellow';
+        }
+      }
+
+      // selected line (single rope per bollard)
+      const sx = hullX;
+      const sy = hullY;
+      const ex = BERTH_X;
+      const ey = bollY;
+
       const line = el('line', {
-        x1: hullX,
-        y1: hullY,
-        x2: BERTH_X,
-        y2: bollY,
+        x1:sx,y1:sy,x2:ex,y2:ey,
         stroke: lineColor,
-        'stroke-width': lineColor === 'black' ? 4.5 : 3,
-        'stroke-linecap': 'round'
+        'stroke-width': ov === 'alert' ? 4.5 : 3,
+        'stroke-linecap':'round'
       });
+      if (ov === 'alert') line.setAttribute('stroke-dasharray','4,3');
 
-      if (lineColor === 'black') {
-        line.setAttribute('stroke-dasharray','4,3');
-      }
+      // click handler for override
+      line.style.cursor = 'pointer';
+      line.addEventListener('click', (evt) => {
+        pickerCtx = { bollard: b.name };
+        pickerSel.value = ov || '';
+        picker.style.left = `${evt.clientX+8}px`;
+        picker.style.top  = `${evt.clientY+8}px`;
+        picker.style.display = 'block';
+      });
 
       svgMain.appendChild(line);
 
-      // Bollard marker
+      // bollard marker
       svgMain.appendChild(el('rect', {
         x: BERTH_X-8, y: bollY-8, width: 16, height: 16,
         fill: '#bbb', stroke: '#777', 'stroke-width': 1.2
@@ -325,6 +483,7 @@
 
   async function fetchAndRender() {
     try {
+      purgeOverrides();
       const res = await fetch(API_URL);
       if (!res.ok) {
         console.error('Failed to fetch ship data:', res.status);
@@ -332,12 +491,90 @@
       }
 
       const data = await res.json();
-      drawWorkerView(data);
+      lastData = data;
+
+      drawGroupView(data);
       updateMeta(data);
     } catch (err) {
       console.error('fetch/render error', err);
     }
   }
+
+  // colour picker events
+  pickerApply.addEventListener('click', async () => {
+    if (!pickerCtx) {
+      picker.style.display = 'none';
+      return;
+    }
+    const name = pickerCtx.bollard;
+    const val  = pickerSel.value;
+
+    // Determine colour and alert status
+    let colour = '';
+    let alert = false;
+
+    if (!val) {
+      delete bollardOverrides[name];
+      delete bollardExpiry[name];
+    } else {
+      bollardOverrides[name] = val;
+      bollardExpiry[name]    = Date.now() + OVERRIDE_TTL_MS;
+
+      // Map the selection to colour and alert
+      if (val === 'alert') {
+        colour = 'black';
+        alert = true;
+      } else {
+        colour = val;  // 'red', 'green', or 'yellow'
+        alert = false;
+      }
+
+      // Send webhook request
+      if (lastData && lastData.berth) {
+        try {
+          const webhookPayload = {
+            berth_name: lastData.berth,
+            bollard_name: name,
+            colour: colour,
+            alert: alert
+          };
+
+          console.log('Sending webhook:', webhookPayload);
+
+          const response = await fetch('/webhook', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(webhookPayload)
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Webhook request failed:', response.status, response.statusText, errorText);
+          } else {
+            const result = await response.json();
+            console.log('Webhook success:', result);
+          }
+        } catch (error) {
+          console.error('Error sending webhook:', error);
+        }
+      }
+    }
+
+    picker.style.display = 'none';
+    pickerCtx = null;
+
+    if (lastData) {
+      drawGroupView(lastData);
+      updateMeta(lastData);
+    }
+  });
+
+  pickerCancel.addEventListener('click', () => {
+    picker.style.display = 'none';
+    pickerCtx = null;
+  });
 
   // Start fetching and rendering
   fetchAndRender();

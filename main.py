@@ -17,6 +17,7 @@ from websocket_client import ConnectionManager
 DEFAULT_SHIP_W = 20
 DEFAULT_SHIP_L = 80
 
+#todo: BUG -- webhook works, the data stream instantly overrides it bc calculate new colour
 app = FastAPI(
     title="BHP Mooring System Backend API",
     description="Backend API for Mooring System Monitoring",
@@ -122,7 +123,9 @@ async def get_ship_data(ship_id: str):
                         "total_tension": bollard.total_tension,
                         "active_hooks": bollard.active_hook_count,
                         "tensions_by_line": bollard.get_tensions_by_line(),
-                        "hooks": hooks_data
+                        "hooks": hooks_data,
+                        "colour": bollard.colour,
+                        "alert": bollard.alert
                     })
 
             orientation_angle = calculate_orientation_from_two_radars(berth)

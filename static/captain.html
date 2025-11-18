@@ -454,8 +454,9 @@
     const yMin = 80, yMax = HEIGHT-80;
 
     const alarmBanner = document.getElementById('alarmBanner');
-    const hasAlert = Object.values(bollardOverrides).includes('alert');
-    alarmBanner.style.display = hasAlert ? 'block' : 'none';
+    const hasLocalAlert = Object.values(bollardOverrides).includes('alert');
+    const hasServerAlert = bollards.some(b => b.alert === true);
+    alarmBanner.style.display = (hasLocalAlert || hasServerAlert) ? 'block' : 'none';
 
     bollards.forEach((b, idx) => {
       const t = n===1 ? 0.5 : idx/(n-1);
@@ -496,7 +497,11 @@
         baseDesired += isBack ? 5 : -5;
       }
 
-            const ov = bollardOverrides[b.name] || '';
+      // Read override from server (bollard.colour) or local override
+      // Local override takes precedence (for immediate UI feedback)
+      const serverColour = b.colour && b.colour !== 'Grey' ? b.colour.toLowerCase() : '';
+      const localOverride = bollardOverrides[b.name] || '';
+      const ov = localOverride || serverColour;
       const dOv = overrideDelta(ov);
       let desired = baseDesired + dOv;
 

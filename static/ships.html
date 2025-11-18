@@ -2,452 +2,346 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ship Selection - BHP Mooring System</title>
+  <title>Worker View - Mooring Status</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
     body {
-      font-family: system-ui, -apple-system, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      background: #f5f5f5;
+      color: #111;
     }
-
-    .container {
-      max-width: 800px;
-      width: 100%;
-    }
-
-    .header {
+    h2 {
+      margin: 16px 0 8px;
       text-align: center;
-      color: white;
-      margin-bottom: 40px;
-    }
-
-    .header h1 {
-      font-size: 2.5rem;
-      margin-bottom: 10px;
       font-weight: 700;
     }
-
-    .header p {
-      font-size: 1.1rem;
-      opacity: 0.9;
-    }
-
-    .ships-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-      gap: 20px;
-      margin-bottom: 20px;
-    }
-
-    .ship-card {
-      background: white;
-      border-radius: 12px;
-      padding: 24px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
-      cursor: pointer;
-      transition: all 0.3s ease;
-      border: 2px solid transparent;
-    }
-
-    .ship-card:hover {
-      transform: translateY(-4px);
-      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15), 0 6px 12px rgba(0, 0, 0, 0.1);
-      border-color: #667eea;
-    }
-
-    .ship-card.active {
-      border-color: #4ade80;
-      background: #f0fdf4;
-    }
-
-    .ship-card h3 {
-      font-size: 1.25rem;
-      color: #1f2937;
-      margin-bottom: 12px;
-      font-weight: 600;
-    }
-
-    .ship-info {
-      font-size: 0.875rem;
-      color: #6b7280;
-      margin-bottom: 8px;
-    }
-
-    .ship-info strong {
-      color: #374151;
-    }
-
-    .status-badge {
-      display: inline-block;
-      padding: 4px 12px;
-      border-radius: 12px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      margin-top: 8px;
-    }
-
-    .status-badge.active {
-      background: #dcfce7;
-      color: #166534;
-    }
-
-    .status-badge.inactive {
-      background: #f3f4f6;
-      color: #6b7280;
-    }
-
-    .loading {
-      text-align: center;
-      color: white;
-      font-size: 1.2rem;
-      padding: 40px;
-    }
-
-    .error {
-      background: #fee2e2;
-      border: 2px solid #ef4444;
-      border-radius: 8px;
-      padding: 16px;
-      color: #991b1b;
-      text-align: center;
-      margin-bottom: 20px;
-    }
-
-    .empty-state {
-      background: white;
-      border-radius: 12px;
-      padding: 48px;
-      text-align: center;
-      color: #6b7280;
-    }
-
-    .empty-state svg {
-      width: 64px;
-      height: 64px;
-      margin: 0 auto 16px;
-      opacity: 0.5;
-    }
-
-    .refresh-button {
-      background: white;
-      color: #667eea;
-      border: none;
-      padding: 12px 24px;
-      border-radius: 8px;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    .refresh-button:hover {
-      background: #f3f4f6;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-    }
-
-    .view-buttons {
+    #root {
       display: flex;
-      gap: 8px;
-      margin-top: 12px;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 12px;
     }
-
-    .view-button {
-      flex: 1;
-      padding: 8px 12px;
-      border: none;
+    .view-panel {
+      background: #ddd;
       border-radius: 6px;
-      font-size: 0.875rem;
+      padding: 16px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    }
+    svg {
+      background: #d3d3d3;
+      border-radius: 6px;
+      display: block;
+    }
+
+    .legend {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      font-size: 12px;
+      margin-top: 6px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .legend-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 2px;
+      border: 1px solid #444;
+    }
+    .red    { background: red; }
+    .green  { background: green; }
+    .yellow { background: yellow; }
+    .black  { background: black; }
+
+    #alarmBanner {
+      margin: 4px auto 0;
+      width: fit-content;
+      padding: 6px 12px;
+      border-radius: 4px;
+      background: #b71c1c;
+      color: #fff;
+      font-size: 14px;
       font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
+      display: none;
     }
 
-    .view-button.captain {
-      background: #667eea;
+    #meta {
+      text-align: center;
+      margin-top: 6px;
+      font-size: 12px;
+    }
+
+    .worker-badge {
+      background: #4caf50;
       color: white;
-    }
-
-    .view-button.captain:hover {
-      background: #5568d3;
-      transform: translateY(-1px);
-    }
-
-    .view-button.worker {
-      background: #4ade80;
-      color: white;
-    }
-
-    .view-button.worker:hover {
-      background: #22c55e;
-      transform: translateY(-1px);
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>⚓ BHP Mooring System</h1>
-      <p>Select a ship to view mooring dashboard</p>
-    </div>
+<div id="root">
+  <h2>Mooring Status <span class="worker-badge">Worker View</span></h2>
 
-    <div id="content">
-      <div class="loading">Loading ships...</div>
-    </div>
+  <div class="view-panel">
+    <svg id="svgMain" width="420" height="520"></svg>
   </div>
 
-  <script>
-    const API_URL = '/terminal/status';
+  <div class="legend">
+    <div class="legend-item"><div class="legend-color red"></div>red = tighten</div>
+    <div class="legend-item"><div class="legend-color green"></div>green = slacken</div>
+    <div class="legend-item"><div class="legend-color yellow"></div>yellow = small / none</div>
+    <div class="legend-item"><div class="legend-color black"></div>black = alert / unsafe</div>
+  </div>
 
-    async function loadShips() {
-      const contentDiv = document.getElementById('content');
+  <div id="alarmBanner">⚠️ ALERT STATUS ACTIVE</div>
+  <div id="meta"></div>
+  <div style="text-align: center; margin-top: 12px;">
+    <a href="/static/ships.html" style="color: #667eea; text-decoration: none; font-size: 14px; font-weight: 600;">
+      ← Back to Ship Selection
+    </a>
+  </div>
+</div>
 
-      try {
-        const response = await fetch(API_URL);
+<script>
+  // === config ===
+  const urlParams = new URLSearchParams(window.location.search);
+  const SHIP_ID = urlParams.get('ship_id') || '9564';
+  const API_URL = `/ships/${SHIP_ID}`;
 
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
+  const svgMain = document.getElementById('svgMain');
+  const NS      = 'http://www.w3.org/2000/svg';
 
-        const data = await response.json();
+  const WIDTH  = 420;
+  const HEIGHT = 520;
 
-        if (!data.berths || data.berths.length === 0) {
-          contentDiv.innerHTML = `
-            <div class="empty-state">
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
-              </svg>
-              <h3>No ships available</h3>
-              <p>No ships are currently moored at any berth</p>
-            </div>
-          `;
-          return;
-        }
+  const BERTH_X = 110;
+  const SHIP_L  = 360;
+  const SHIP_W  = 120;
+  const MIN_GAP = 15;
 
-        // Filter berths that have ships
-        const berthsWithShips = data.berths.filter(berth => berth.has_ship && berth.ship_name);
+  const ANGLE_THRESH = Math.PI / 180;
 
-        if (berthsWithShips.length === 0) {
-          contentDiv.innerHTML = `
-            <div class="empty-state">
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
-              </svg>
-              <h3>No ships available</h3>
-              <p>No ships are currently moored at any berth</p>
-              <br>
-              <button class="refresh-button" onclick="loadShips()">Refresh</button>
-            </div>
-          `;
-          return;
-        }
+  function clearSvg(svg) {
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+  }
 
-        // Render ships
-        const shipsHtml = berthsWithShips.map(berth => `
-          <div class="ship-card ${berth.has_ship ? 'active' : ''}" onclick="selectShip('${getVesselId(berth)}')">
-            <h3>${berth.ship_name || 'Unknown Ship'}</h3>
-            <div class="ship-info">
-              <strong>Berth:</strong> ${berth.name}
-            </div>
-            <div class="ship-info">
-              <strong>Total Tension:</strong> ${berth.total_tension ? berth.total_tension.toFixed(1) + ' kN' : 'N/A'}
-            </div>
-            <span class="status-badge ${berth.has_ship ? 'active' : 'inactive'}">
-              ${berth.has_ship ? 'Active' : 'Inactive'}
-            </span>
-          </div>
-        `).join('');
+  function el(name, attrs={}) {
+    const e = document.createElementNS(NS, name);
+    for (const [k,v] of Object.entries(attrs)) e.setAttribute(k,v);
+    return e;
+  }
 
-        contentDiv.innerHTML = `
-          <div class="ships-grid">
-            ${shipsHtml}
-          </div>
-          <div style="text-align: center;">
-            <button class="refresh-button" onclick="loadShips()">Refresh</button>
-          </div>
-        `;
+  function rotate(x, y, a) {
+    const c = Math.cos(a), s = Math.sin(a);
+    return { x: x*c - y*s, y: x*s + y*c };
+  }
 
-      } catch (error) {
-        console.error('Error loading ships:', error);
-        contentDiv.innerHTML = `
-          <div class="error">
-            <strong>Error loading ships</strong><br>
-            ${error.message}
-          </div>
-          <div style="text-align: center;">
-            <button class="refresh-button" onclick="loadShips()">Try Again</button>
-          </div>
-        `;
+  function hullAnchor(geom, lineType, bollardIndex, totalBollards, tAlong) {
+    const L = SHIP_L;
+    const compress = 0.6;
+
+    let yLocal;
+
+    switch (lineType) {
+      case 'HEAD':
+        yLocal = -0.5 * L * compress;
+        break;
+      case 'STERN':
+        yLocal = 0.5 * L * compress;
+        break;
+      case 'SPRING': {
+        const frontHalf = bollardIndex < totalBollards / 2;
+        yLocal = (frontHalf ? 0.3 : -0.3) * L * compress;
+        break;
       }
+      case 'BREAST':
+      default:
+        yLocal = (tAlong - 0.5) * L * compress;
+        break;
     }
 
-    // Since /terminal/status doesn't return vessel IDs, we'll need to fetch individual berth data
-    // or use a workaround. For now, we'll use the ship name as an identifier and fetch from /ships
-    async function getShipDataByBerth(berthName) {
-      try {
-        const response = await fetch(`/berth/${berthName}`);
-        if (!response.ok) return null;
-        const data = await response.json();
-        return data;
-      } catch (error) {
-        console.error('Error fetching berth data:', error);
-        return null;
+    const localX = -geom.halfW;
+    const r = rotate(localX, yLocal, geom.angle);
+    return { x: r.x + geom.cx, y: r.y + geom.cy };
+  }
+
+  function computeShipGeom(angleRad, radars) {
+    const rawAngle = angleRad || 0;
+
+    const active = (radars || [])
+      .filter(r => r.is_active && r.distance != null)
+      .map(r => r.distance);
+
+    const avgDistM = active.length
+      ? active.reduce((a,b)=>a+b,0) / active.length
+      : 10;
+
+    const M_TO_PX = 6;
+    let distPx = avgDistM * M_TO_PX;
+    if (distPx < 40) distPx = 40;
+
+    const cx0 = BERTH_X + distPx + SHIP_W / 2;
+    const cy  = HEIGHT / 2;
+
+    const halfL = SHIP_L / 2;
+    const halfW = SHIP_W / 2;
+
+    const bowInset   = SHIP_L * 0.18;
+    const sternInset = SHIP_L * 0.10;
+
+    const localHull = [
+      { x: -halfW,      y: -halfL + bowInset },
+      { x:  0,          y: -halfL            },
+      { x:  halfW,      y: -halfL + bowInset },
+      { x:  halfW,      y:  halfL - sternInset },
+      { x:  halfW * 0.6,y:  halfL            },
+      { x: -halfW * 0.6,y:  halfL            },
+      { x: -halfW,      y:  halfL - sternInset }
+    ];
+
+    const rotated = localHull.map(p => {
+      const r = rotate(p.x, p.y, rawAngle);
+      return { x: r.x + cx0, y: r.y + cy };
+    });
+
+    let minX = Math.min(...rotated.map(p => p.x));
+    let offX = 0;
+    if (minX < BERTH_X + MIN_GAP) {
+      offX = (BERTH_X + MIN_GAP) - minX;
+    }
+
+    const hull = rotated.map(p => ({ x: p.x + offX, y: p.y }));
+
+    return {
+      angle: rawAngle,
+      cx: cx0 + offX,
+      cy,
+      halfL,
+      halfW,
+      hull
+    };
+  }
+
+  function drawWorkerView(data) {
+    clearSvg(svgMain);
+    if (!data || !data.statistics) return;
+
+    const angle = (data.statistics.orientation_angle || 0) * Math.PI / 180;
+    const geom  = computeShipGeom(angle, data.radars);
+
+    // berth line
+    svgMain.appendChild(el('line', {
+      x1: BERTH_X, y1: 40,
+      x2: BERTH_X, y2: HEIGHT-40,
+      stroke: '#999', 'stroke-width': 6
+    }));
+
+    // ship hull
+    const d = geom.hull.map((p,i)=> (i ? 'L' : 'M') + p.x + ' ' + p.y).join(' ') + ' Z';
+    svgMain.appendChild(el('path', {
+      d,
+      fill: '#64b5f6', 'fill-opacity': 0.9,
+      stroke: '#4a90e2', 'stroke-width': 2
+    }));
+
+    const bollards = data.bollards || [];
+    const n = bollards.length || 1;
+    const yMin = 80, yMax = HEIGHT-80;
+
+    // Check for alert status
+    const hasAlert = bollards.some(b =>
+      b.hooks && b.hooks.some(h => h.colour === 'black' || h.alert)
+    );
+    const alarmBanner = document.getElementById('alarmBanner');
+    alarmBanner.style.display = hasAlert ? 'block' : 'none';
+
+    bollards.forEach((b, idx) => {
+      const t = n===1 ? 0.5 : idx/(n-1);
+      const bollY = yMin + t*(yMax-yMin);
+
+      const hooks = b.hooks || [];
+
+      // Pick a representative line type for this bollard
+      const mainType =
+        (hooks.find(h => h.line_type)?.line_type) ||
+        (hooks[0]?.line_type) ||
+        'BREAST';
+
+      const anchor = hullAnchor(geom, mainType, idx, n, t);
+      const hullX  = anchor.x;
+      const hullY  = anchor.y;
+
+      // Get the colour from the first hook (captain's selection)
+      // Default to yellow if no colour is set
+      let lineColor = 'yellow';
+      if (hooks.length > 0 && hooks[0].colour) {
+        lineColor = hooks[0].colour;
       }
-    }
 
-    // Extract vessel ID from berth data
-    // Since /terminal/status doesn't include vessel IDs, we need to fetch from the ships endpoint
-    // For now, we'll use a simpler approach: fetch all ships and match by berth
-    let shipsCache = null;
+      // Draw the line from ship to bollard
+      const line = el('line', {
+        x1: hullX,
+        y1: hullY,
+        x2: BERTH_X,
+        y2: bollY,
+        stroke: lineColor,
+        'stroke-width': lineColor === 'black' ? 4.5 : 3,
+        'stroke-linecap': 'round'
+      });
 
-    async function loadShipsWithVesselIds() {
-      const contentDiv = document.getElementById('content');
-
-      try {
-        // First get terminal status to see which berths have ships
-        const statusResponse = await fetch(API_URL);
-        if (!statusResponse.ok) {
-          throw new Error(`HTTP error! status: ${statusResponse.status}`);
-        }
-
-        const statusData = await statusResponse.json();
-        const berthsWithShips = statusData.berths.filter(berth => berth.has_ship && berth.ship_name);
-
-        if (berthsWithShips.length === 0) {
-          contentDiv.innerHTML = `
-            <div class="empty-state">
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
-              </svg>
-              <h3>No ships available</h3>
-              <p>No ships are currently moored at any berth</p>
-              <br>
-              <button class="refresh-button" onclick="loadShipsWithVesselIds()">Refresh</button>
-            </div>
-          `;
-          return;
-        }
-
-        // Fetch detailed berth data to get vessel IDs
-        const berthDetailsPromises = berthsWithShips.map(berth =>
-          fetch(`/berth/${berth.name}`).then(r => r.ok ? r.json() : null)
-        );
-
-        const berthDetails = await Promise.all(berthDetailsPromises);
-
-        // Parse berth details and extract ship info
-        const ships = [];
-        for (let i = 0; i < berthDetails.length; i++) {
-          if (berthDetails[i]) {
-            try {
-              const parsed = typeof berthDetails[i] === 'string'
-                ? JSON.parse(berthDetails[i])
-                : berthDetails[i];
-
-              if (parsed.ship) {
-                const shipData = typeof parsed.ship === 'string'
-                  ? JSON.parse(parsed.ship)
-                  : parsed.ship;
-
-                ships.push({
-                  name: shipData.name,
-                  vesselId: shipData.vesselId,
-                  berth: berthsWithShips[i].name,
-                  totalTension: berthsWithShips[i].total_tension
-                });
-              }
-            } catch (e) {
-              console.error('Error parsing berth data:', e);
-            }
-          }
-        }
-
-        if (ships.length === 0) {
-          contentDiv.innerHTML = `
-            <div class="empty-state">
-              <h3>No ships available</h3>
-              <p>Could not load ship details</p>
-              <br>
-              <button class="refresh-button" onclick="loadShipsWithVesselIds()">Refresh</button>
-            </div>
-          `;
-          return;
-        }
-
-        // Render ships
-        const shipsHtml = ships.map(ship => `
-          <div class="ship-card active">
-            <h3>${ship.name}</h3>
-            <div class="ship-info">
-              <strong>Vessel ID:</strong> ${ship.vesselId}
-            </div>
-            <div class="ship-info">
-              <strong>Berth:</strong> ${ship.berth}
-            </div>
-            <div class="ship-info">
-              <strong>Total Tension:</strong> ${ship.totalTension ? ship.totalTension.toFixed(1) + ' kN' : 'N/A'}
-            </div>
-            <span class="status-badge active">Active</span>
-            <div class="view-buttons">
-              <button class="view-button captain" onclick="selectShip('${ship.vesselId}', 'captain')">Captain View</button>
-              <button class="view-button worker" onclick="selectShip('${ship.vesselId}', 'worker')">Worker View</button>
-            </div>
-          </div>
-        `).join('');
-
-        contentDiv.innerHTML = `
-          <div class="ships-grid">
-            ${shipsHtml}
-          </div>
-          <div style="text-align: center;">
-            <button class="refresh-button" onclick="loadShipsWithVesselIds()">Refresh</button>
-          </div>
-        `;
-
-      } catch (error) {
-        console.error('Error loading ships:', error);
-        contentDiv.innerHTML = `
-          <div class="error">
-            <strong>Error loading ships</strong><br>
-            ${error.message}
-          </div>
-          <div style="text-align: center;">
-            <button class="refresh-button" onclick="loadShipsWithVesselIds()">Try Again</button>
-          </div>
-        `;
+      if (lineColor === 'black') {
+        line.setAttribute('stroke-dasharray','4,3');
       }
-    }
 
-    function getVesselId(berth) {
-      // This is a placeholder - in production, you'd get this from the API
-      // For now, we'll need to fetch the berth details to get vessel ID
-      return 'loading';
-    }
+      svgMain.appendChild(line);
 
-    function selectShip(vesselId, viewType = 'captain') {
-      if (vesselId && vesselId !== 'loading') {
-        const page = viewType === 'worker' ? 'worker.html' : 'captain.html';
-        window.location.href = `/static/${page}?ship_id=${vesselId}`;
+      // Bollard marker
+      svgMain.appendChild(el('rect', {
+        x: BERTH_X-8, y: bollY-8, width: 16, height: 16,
+        fill: '#bbb', stroke: '#777', 'stroke-width': 1.2
+      }));
+    });
+  }
+
+  function updateMeta(data) {
+    const meta = document.getElementById('meta');
+    if (!data || !data.statistics) {
+      meta.textContent = '';
+      return;
+    }
+    const ang = (data.statistics.orientation_angle || 0).toFixed(2);
+    meta.textContent =
+      `${data.ship.name} @ ${data.berth} | angle ${ang}° | total tension ${data.statistics.total_tension}`;
+  }
+
+  async function fetchAndRender() {
+    try {
+      const res = await fetch(API_URL);
+      if (!res.ok) {
+        console.error('Failed to fetch ship data:', res.status);
+        return;
       }
+
+      const data = await res.json();
+      drawWorkerView(data);
+      updateMeta(data);
+    } catch (err) {
+      console.error('fetch/render error', err);
     }
+  }
 
-    // Load ships on page load
-    loadShipsWithVesselIds();
-
-    // Auto-refresh every 30 seconds
-    setInterval(loadShipsWithVesselIds, 30000);
-  </script>
+  // Start fetching and rendering
+  fetchAndRender();
+  setInterval(fetchAndRender, 5000);  // Refresh every 5 seconds
+</script>
 </body>
 </html>
